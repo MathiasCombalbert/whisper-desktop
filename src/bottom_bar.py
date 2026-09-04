@@ -69,7 +69,7 @@ class BottomBarHUD:
                 print(f"[HUD Warning] Style NoActivate: {e}")
 
         # Conteneur principal (takefocus=0)
-        self.container = tk.Frame(self.root, bg="#1e1e2e", highlightbackground="#45475a", highlightthickness=1, takefocus=0)
+        self.container = tk.Frame(self.root, bg="#181825", highlightbackground="#313244", highlightthickness=1, takefocus=0)
         self.container.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
         # Glisser-déposer pour repositionner librement la barre
@@ -77,21 +77,21 @@ class BottomBarHUD:
         self.container.bind("<B1-Motion>", self._on_drag)
 
         # 1. Section GAUCHE : Indicateur et Statut
-        left_frame = tk.Frame(self.container, bg="#1e1e2e", takefocus=0)
+        left_frame = tk.Frame(self.container, bg="#181825", takefocus=0)
         left_frame.pack(side=tk.LEFT, padx=(12, 8), pady=4)
         left_frame.bind("<ButtonPress-1>", self._start_drag)
         left_frame.bind("<B1-Motion>", self._on_drag)
 
-        self.dot_canvas = tk.Canvas(left_frame, width=14, height=14, bg="#1e1e2e", highlightthickness=0, takefocus=0)
+        self.dot_canvas = tk.Canvas(left_frame, width=14, height=14, bg="#181825", highlightthickness=0, takefocus=0)
         self.dot_canvas.pack(side=tk.LEFT, padx=(0, 6))
-        self.dot_id = self.dot_canvas.create_oval(2, 2, 12, 12, fill="#a6e3a1", outline="")
+        self.dot_id = self.dot_canvas.create_oval(3, 3, 11, 11, fill="#a6e3a1", outline="")
 
         self.status_label = tk.Label(
             left_frame,
             text="Prêt",
             font=("Segoe UI", 9, "bold"),
             fg="#a6e3a1",
-            bg="#1e1e2e",
+            bg="#181825",
             width=8,
             anchor="w",
             takefocus=0
@@ -99,52 +99,62 @@ class BottomBarHUD:
         self.status_label.pack(side=tk.LEFT)
 
         # Séparateur vertical
-        sep1 = tk.Frame(self.container, bg="#313244", width=1, height=36, takefocus=0)
+        sep1 = tk.Frame(self.container, bg="#313244", width=1, height=34, takefocus=0)
         sep1.pack(side=tk.LEFT, padx=6)
 
         # 2. Section CENTRALE : Micro & VU-Mètre / Dernier texte
-        center_frame = tk.Frame(self.container, bg="#1e1e2e", takefocus=0)
+        center_frame = tk.Frame(self.container, bg="#181825", takefocus=0)
         center_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=6, pady=4)
         center_frame.bind("<ButtonPress-1>", self._start_drag)
         center_frame.bind("<B1-Motion>", self._on_drag)
 
-        top_center = tk.Frame(center_frame, bg="#1e1e2e", takefocus=0)
+        top_center = tk.Frame(center_frame, bg="#181825", takefocus=0)
         top_center.pack(fill=tk.X)
         top_center.bind("<ButtonPress-1>", self._start_drag)
         top_center.bind("<B1-Motion>", self._on_drag)
 
         # Micro & sélecteur déroulant
-        mic_box = tk.Frame(top_center, bg="#1e1e2e", cursor="hand2", takefocus=0)
+        mic_box = tk.Frame(top_center, bg="#181825", cursor="hand2", takefocus=0)
         mic_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.mic_label = tk.Label(
             mic_box,
             text="🎙️ Détection micro...",
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 8, "bold"),
             fg="#cdd6f4",
-            bg="#1e1e2e",
+            bg="#181825",
             anchor="w",
             cursor="hand2",
             takefocus=0
         )
         self.mic_label.pack(side=tk.LEFT)
-        self.mic_label.bind("<Button-1>", self._on_mic_clicked)
 
         self.mic_arrow = tk.Label(
             mic_box,
             text=" ▾",
             font=("Segoe UI", 8, "bold"),
             fg="#89b4fa",
-            bg="#1e1e2e",
+            bg="#181825",
             cursor="hand2",
             takefocus=0
         )
         self.mic_arrow.pack(side=tk.LEFT)
-        self.mic_arrow.bind("<Button-1>", self._on_mic_clicked)
-        mic_box.bind("<Button-1>", self._on_mic_clicked)
+
+        # Hover interactif sur le sélecteur micro
+        def _mic_enter(e):
+            self.mic_label.config(fg="#89b4fa")
+            self.mic_arrow.config(fg="#b4befe")
+        def _mic_leave(e):
+            self.mic_label.config(fg="#cdd6f4")
+            self.mic_arrow.config(fg="#89b4fa")
+
+        for w in [mic_box, self.mic_label, self.mic_arrow]:
+            w.bind("<Button-1>", self._on_mic_clicked)
+            w.bind("<Enter>", _mic_enter)
+            w.bind("<Leave>", _mic_leave)
 
         # Mini VU-mètre audio
-        self.vu_canvas = tk.Canvas(top_center, width=80, height=8, bg="#313244", highlightthickness=0, takefocus=0)
+        self.vu_canvas = tk.Canvas(top_center, width=80, height=8, bg="#26273a", highlightthickness=0, takefocus=0)
         self.vu_canvas.pack(side=tk.RIGHT, padx=(4, 0))
         self.vu_bar = self.vu_canvas.create_rectangle(0, 0, 0, 8, fill="#a6e3a1", outline="")
 
@@ -152,9 +162,9 @@ class BottomBarHUD:
         self.preview_label = tk.Label(
             center_frame,
             text="Appuyez sur votre raccourci ou Parler pour dicter...",
-            font=("Segoe UI", 8, "italic"),
+            font=("Segoe UI", 8),
             fg="#6c7086",
-            bg="#1e1e2e",
+            bg="#181825",
             anchor="w",
             cursor="hand2",
             takefocus=0
@@ -163,11 +173,11 @@ class BottomBarHUD:
         self.preview_label.bind("<Button-1>", self._on_preview_clicked)
 
         # Séparateur vertical
-        sep2 = tk.Frame(self.container, bg="#313244", width=1, height=36, takefocus=0)
+        sep2 = tk.Frame(self.container, bg="#313244", width=1, height=34, takefocus=0)
         sep2.pack(side=tk.LEFT, padx=6)
 
-        # 3. Section DROITE : Bouton d'action, Molette Paramètres et Réduire/Fermer
-        right_frame = tk.Frame(self.container, bg="#1e1e2e", takefocus=0)
+        # 3. Section DROITE : Bouton d'action, Molette Paramètres et Fermer
+        right_frame = tk.Frame(self.container, bg="#181825", takefocus=0)
         right_frame.pack(side=tk.RIGHT, padx=(6, 10), pady=4)
 
         # Bouton Principal (Parler / Coller) - Design moderne et épuré
@@ -181,7 +191,7 @@ class BottomBarHUD:
             activeforeground="#11111b",
             relief=tk.FLAT,
             bd=0,
-            padx=12,
+            padx=14,
             pady=3,
             cursor="hand2",
             takefocus=0,
@@ -189,62 +199,62 @@ class BottomBarHUD:
         )
         self.action_btn.pack(side=tk.LEFT, padx=(0, 6))
 
+        def _action_enter(e):
+            if self.app.is_recording:
+                self.action_btn.config(bg="#eba0ac")
+            elif not self.app.is_transcribing:
+                self.action_btn.config(bg="#b4befe")
+
+        def _action_leave(e):
+            if self.app.is_recording:
+                self.action_btn.config(bg="#f38ba8")
+            elif not self.app.is_transcribing:
+                self.action_btn.config(bg="#89b4fa")
+
+        self.action_btn.bind("<Enter>", _action_enter)
+        self.action_btn.bind("<Leave>", _action_leave)
+
         # Molette Paramètres ⚙️
         settings_btn = tk.Button(
             right_frame,
             text="⚙️",
             font=("Segoe UI", 10),
-            bg="#1e1e2e",
+            bg="#181825",
             fg="#a6adc8",
             activebackground="#313244",
             activeforeground="#cdd6f4",
             relief=tk.FLAT,
             bd=0,
-            padx=5,
+            padx=6,
             pady=2,
             cursor="hand2",
             takefocus=0,
             command=self._on_settings_clicked
         )
-        settings_btn.pack(side=tk.LEFT, padx=(0, 3))
+        settings_btn.pack(side=tk.LEFT, padx=(0, 4))
+        settings_btn.bind("<Enter>", lambda e: settings_btn.config(bg="#313244", fg="#cdd6f4"))
+        settings_btn.bind("<Leave>", lambda e: settings_btn.config(bg="#181825", fg="#a6adc8"))
 
-        # Bouton Réduire vers le Tray ("le petit moins")
-        min_btn = tk.Button(
-            right_frame,
-            text="—",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#6c7086",
-            activebackground="#313244",
-            activeforeground="#89b4fa",
-            relief=tk.FLAT,
-            bd=0,
-            padx=5,
-            pady=2,
-            cursor="hand2",
-            takefocus=0,
-            command=self.hide_to_tray
-        )
-        min_btn.pack(side=tk.LEFT, padx=(0, 2))
-
-        # Bouton Fermer vers le Tray
+        # Bouton Fermer vers le Tray (seul bouton de fermeture conservé)
         close_btn = tk.Button(
             right_frame,
             text="✕",
-            font=("Segoe UI", 8, "bold"),
-            bg="#1e1e2e",
-            fg="#6c7086",
-            activebackground="#313244",
-            activeforeground="#f38ba8",
+            font=("Segoe UI", 9, "bold"),
+            bg="#181825",
+            fg="#7f849c",
+            activebackground="#e78284",
+            activeforeground="#11111b",
             relief=tk.FLAT,
             bd=0,
-            padx=5,
+            padx=7,
             pady=2,
             cursor="hand2",
             takefocus=0,
             command=self.hide_to_tray
         )
         close_btn.pack(side=tk.LEFT)
+        close_btn.bind("<Enter>", lambda e: close_btn.config(bg="#e78284", fg="#11111b"))
+        close_btn.bind("<Leave>", lambda e: close_btn.config(bg="#181825", fg="#7f849c"))
 
         # Démarrer masqué par défaut en arrière-plan
         self.hide_to_tray()
@@ -350,7 +360,7 @@ class BottomBarHUD:
             time_str = f"{m:02d}:{s:02d}"
 
             self._blink_state = not self._blink_state
-            dot_color = "#f38ba8" if self._blink_state else "#1e1e2e"
+            dot_color = "#f38ba8" if self._blink_state else "#181825"
             self.dot_canvas.itemconfig(self.dot_id, fill=dot_color)
             self.status_label.config(text=time_str)
 
