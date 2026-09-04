@@ -1,0 +1,62 @@
+name: Build & Release Windows Executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Application with PyInstaller
+        run: |
+          pyinstaller --noconsole --onedir --name "WhisperDesktop" `
+            --add-data "config.json;." `
+            --collect-all faster_whisper `
+            --collect-all ctranslate2 `
+            --hidden-import "pystray" `
+            --hidden-import "sounddevice" `
+            --hidden-import "keyboard" `
+            --hidden-import "pyperclip" `
+            app.py
+
+      - name: Copy auxiliary files to dist
+        run: |
+          Copy-Item -Path "config.json" -Destination "dist/WhisperDesktop/"
+          Copy-Item -Path "run_debug.bat" -Destination "dist/WhisperDesktop/"
+          Copy-Item -Path "LICENSE" -Destination "dist/WhisperDesktop/"
+          Copy-Item -Path "README.md" -Destination "dist/WhisperDesktop/"
+
+      - name: Compress Release Archive
+        run: |
+          Compress-Archive -Path dist/WhisperDesktop -DestinationPath "dist/WhisperDesktop-Windows-x64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/WhisperDesktop-Windows-x64.zip
+          name: "Whisper Desktop ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
