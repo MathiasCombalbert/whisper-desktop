@@ -45,6 +45,9 @@ class SystemTrayManager:
             elif state == "transcribing":
                 self.icon.icon = self.transcribing_img
                 self.icon.title = "Whisper Desktop: Transcription Whisper..."
+            elif state == "standby":
+                self.icon.icon = self.ready_img
+                self.icon.title = f"Whisper Desktop: En veille ({self.app.config.get('hotkey', 'alt+shift+v').upper()})"
             else:
                 self.icon.icon = self.ready_img
                 self.icon.title = f"Whisper Desktop: Prêt ({self.app.config.get('hotkey', 'alt+shift+v').upper()})"

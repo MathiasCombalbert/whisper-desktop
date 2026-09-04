@@ -376,7 +376,7 @@ class BottomBarHUD:
         except Exception:
             pass
 
-    def show_ready(self, last_text=None):
+    def show_ready(self, last_text=None, status_msg="Prêt"):
         if not self.root:
             return
         try:
@@ -387,7 +387,7 @@ class BottomBarHUD:
                     pass
                 self._timer_job = None
 
-            self.status_label.config(text="Prêt", fg="#a6e3a1")
+            self.status_label.config(text=status_msg, fg="#a6e3a1")
             self.dot_canvas.itemconfig(self.dot_id, fill="#a6e3a1")
             self.action_btn.config(text="🎙️ Parler", bg="#89b4fa", activebackground="#b4befe")
 
@@ -498,6 +498,6 @@ class BottomBarHUD:
         if self.root:
             self.root.after(0, self.show_transcribing)
 
-    def show_ready_safe(self, last_text=None):
+    def show_ready_safe(self, last_text=None, status_msg="Prêt"):
         if self.root:
-            self.root.after(0, lambda: self.show_ready(last_text))
+            self.root.after(0, lambda: self.show_ready(last_text, status_msg))

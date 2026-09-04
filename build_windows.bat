@@ -21,6 +21,9 @@ pyinstaller --noconsole --onedir --noconfirm --name "WhisperDesktop" ^
     --add-data "config.json;." ^
     --collect-all faster_whisper ^
     --collect-all ctranslate2 ^
+    --exclude-module torch ^
+    --exclude-module torchvision ^
+    --exclude-module torchaudio ^
     --hidden-import "pystray" ^
     --hidden-import "sounddevice" ^
     --hidden-import "keyboard" ^

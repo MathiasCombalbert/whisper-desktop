@@ -34,6 +34,10 @@ else:
     except Exception:
         sys.exit(0)
 
+# Bloquer PyTorch (inutile pour faster-whisper et consomme +400 Mo)
+if "torch" not in sys.modules:
+    sys.modules["torch"] = None
+
 import json
 import time
 import threading
@@ -66,7 +70,7 @@ LOG_FILE = os.path.join(PROJECT_ROOT, "app.log")
 DEFAULT_CONFIG = {
     "hotkey": "alt+shift+v",
     "mode": "toggle",
-    "model_size": "large-v3-turbo",
+    "model_size": "base",
     "device": "cuda",
     "compute_type": "float16",
     "language": None,
@@ -74,8 +78,9 @@ DEFAULT_CONFIG = {
     "sound_feedback": False,
     "show_overlay": True,
     "auto_hide_seconds": 15,
+    "idle_unload_seconds": 45,
     "audio_device": None,
-    "start_with_windows": False,
+    "start_with_windows": True,
     "initial_prompt": "Transcription en français pour le code, programmation, prompts, coller, copier, IA."
 }
 
@@ -101,6 +106,11 @@ class SpeechToTextApp:
         self.is_recording = False
         self.is_transcribing = False
         self.is_model_ready = False
+        self.is_loading_model = False
+        self.model_load_lock = threading.Lock()
+        self.model_ready_event = threading.Event()
+        self.idle_timer = None
+        self.idle_lock = threading.Lock()
         self.last_work_hwnd = None
         self.hotkey_hook = None
         self._lock = threading.Lock()
@@ -242,7 +252,81 @@ class SpeechToTextApp:
 
         self.save_config()
 
+    def _ensure_model_loading(self):
+        """Déclenche le chargement du modèle Whisper à la demande si pas encore prêt."""
+        if self.is_model_ready and self.transcriber:
+            return
+        with self.model_load_lock:
+            if not self.is_loading_model and (self.transcriber is None or not self.is_model_ready):
+                self.is_loading_model = True
+                self.model_ready_event.clear()
+                threading.Thread(target=self._init_transcriber_async, daemon=True).start()
+
+    def _reset_idle_timer(self):
+        """Planifie le déchargement automatique du modèle après inactivité."""
+        with self.idle_lock:
+            if self.idle_timer:
+                self.idle_timer.cancel()
+            timeout = self.config.get("idle_unload_seconds", 45)
+            if timeout and timeout > 0:
+                self.idle_timer = threading.Timer(timeout, self.unload_transcriber)
+                self.idle_timer.daemon = True
+                self.idle_timer.start()
+
+    def _cancel_idle_timer(self):
+        """Annule le timer d'inactivité lorsqu'une dictée commence."""
+        with self.idle_lock:
+            if self.idle_timer:
+                self.idle_timer.cancel()
+                self.idle_timer = None
+
+    def unload_transcriber(self):
+        """Décharge complètement le modèle Whisper pour repasser en veille à mémoire quasi-nulle."""
+        with self._lock:
+            if self.is_recording or self.is_transcribing:
+                # Ne pas décharger si une capture ou transcription est en cours
+                self._reset_idle_timer()
+                return
+
+            if self.transcriber is not None:
+                log_event("[Memory] Mise en veille : déchargement du modèle Whisper...")
+                try:
+                    if hasattr(self.transcriber, "model"):
+                        del self.transcriber.model
+                    del self.transcriber
+                except Exception:
+                    pass
+                self.transcriber = None
+                self.is_model_ready = False
+                self.model_ready_event.clear()
+
+                import gc
+                gc.collect()
+                if sys.platform == "win32":
+                    try:
+                        import ctypes
+                        ctypes.windll.kernel32.SetProcessWorkingSetSize(
+                            ctypes.windll.kernel32.GetCurrentProcess(),
+                            ctypes.c_size_t(-1),
+                            ctypes.c_size_t(-1)
+                        )
+                    except Exception:
+                        pass
+                log_event("[Memory] Modèle Whisper déchargé. Mémoire libérée pour le mode veille.")
+                if self.bottom_bar:
+                    self.bottom_bar.show_ready_safe(status_msg="Prêt (veille)")
+                if self.tray:
+                    self.tray.set_state("standby")
+
     def _reload_whisper_thread(self, new_model_size: str):
+        if self.transcriber is None:
+            log_event(f"Nouveau modèle configuré : '{new_model_size}' (sera chargé à la prochaine invocation).")
+            if self.bottom_bar and self.bottom_bar.root:
+                self.bottom_bar.root.after(0, lambda: self.bottom_bar.preview_label.config(
+                    text=f"Modèle '{new_model_size}' sélectionné !", fg="#a6e3a1"
+                ))
+            return
+
         if self.bottom_bar and self.bottom_bar.root:
             self.bottom_bar.root.after(0, lambda: self.bottom_bar.preview_label.config(
                 text=f"Chargement du modèle '{new_model_size}'...", fg="#f9e2af"
@@ -255,6 +339,7 @@ class SpeechToTextApp:
                 self.bottom_bar.root.after(0, lambda: self.bottom_bar.preview_label.config(
                     text=f"Modèle '{new_model_size}' prêt !", fg="#a6e3a1"
                 ))
+            self._reset_idle_timer()
         except Exception as e:
             log_event(f"Erreur rechargement modèle Whisper: {e}")
 
@@ -306,11 +391,7 @@ class SpeechToTextApp:
         ).start()
 
     def _handle_hotkey_async(self, current_hwnd):
-        if not self.is_model_ready:
-            if self.bottom_bar and self.bottom_bar.root:
-                self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
-                self.bottom_bar.show_loading_safe("Modèle en cours de chargement, veuillez patienter un instant...")
-            return
+        self._cancel_idle_timer()
 
         if current_hwnd and (not self.bottom_bar or current_hwnd != self.bottom_bar.bar_hwnd):
             self.last_work_hwnd = current_hwnd
@@ -325,6 +406,7 @@ class SpeechToTextApp:
                     # Si la barre était masquée en arrière-plan, la faire apparaître immédiatement
                     if self.bottom_bar and not self.bottom_bar.is_visible:
                         self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
+                    self._ensure_model_loading()
                     self._start_recording()
                 else:
                     self._stop_and_transcribe()
@@ -332,20 +414,18 @@ class SpeechToTextApp:
                 if not self.is_recording:
                     if self.bottom_bar and not self.bottom_bar.is_visible:
                         self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
+                    self._ensure_model_loading()
                     self._start_recording()
                     threading.Thread(target=self._watch_key_release, daemon=True).start()
 
     def on_manual_action(self):
         """Déclenché par le clic sur le bouton de la barre HUD."""
-        if not self.is_model_ready:
-            if self.bottom_bar:
-                self.bottom_bar.show_loading_safe("Modèle en cours de chargement, veuillez patienter un instant...")
-            return
-
+        self._cancel_idle_timer()
         with self._lock:
             if self.is_transcribing:
                 return
             if not self.is_recording:
+                self._ensure_model_loading()
                 self._start_recording()
             else:
                 self._stop_and_transcribe()
@@ -403,6 +483,15 @@ class SpeechToTextApp:
     def _process_transcription_worker(self, audio_data, target_hwnd):
         last_text = ""
         try:
+            # 1. Attendre que le modèle soit prêt s'il est en train de se charger à la demande
+            if not self.is_model_ready or self.transcriber is None:
+                if self.bottom_bar:
+                    self.bottom_bar.show_loading_safe("Finalisation du chargement du modèle Whisper...")
+                self._ensure_model_loading()
+                ready = self.model_ready_event.wait(timeout=35)
+                if not ready or self.transcriber is None:
+                    raise RuntimeError("Le modèle Whisper n'a pas pu être chargé à temps.")
+
             start_t = time.time()
             text = self.transcriber.transcribe(audio_data)
             duration = time.time() - start_t
@@ -427,6 +516,9 @@ class SpeechToTextApp:
 
             if self.bottom_bar:
                 self.bottom_bar.show_ready_safe(last_text=last_text)
+
+            # Lancer le compte à rebours pour décharger le modèle et repasser en veille
+            self._reset_idle_timer()
 
     def stop_and_exit(self):
         log_event("Fermeture de l'application...")
@@ -464,32 +556,28 @@ class SpeechToTextApp:
         self.bottom_bar.set_mic_name(mic_name)
         log_event(f"Microphone configuré : {mic_name}")
 
-        # 2. Initialiser le System Tray IMMÉDIATEMENT (icône visible dans la barre des tâches dès le double-clic)
+        # 2. Initialiser le System Tray IMMÉDIATEMENT
         self.tray = SystemTrayManager(self)
         self.tray.start()
-        self.tray.set_state("loading")
+        self.tray.set_state("standby")
 
         # 3. Enregistrer le raccourci global
         self.register_hotkey()
 
-        model_name = self.config.get("model_size", "large-v3-turbo")
-        self.bottom_bar.show_loading_safe(f"Chargement du modèle Whisper ({model_name})...")
+        # Démarrage direct en veille (0 Mo de modèle chargé, ~35 Mo au total)
+        self.bottom_bar.show_ready_safe(status_msg="Prêt (veille)")
+        log_event("Application prête et en veille minimale (modèle chargé à la demande).")
 
-        # 4. Charger le modèle Whisper en tâche de fond (asynchrone)
-        threading.Thread(target=self._init_transcriber_async, daemon=True).start()
-
-        log_event("Interface prête et icône active dans la barre des tâches ! Modèle en cours de chargement...")
-
-        # 5. Boucle principale d'événements Tkinter
+        # 4. Boucle principale d'événements Tkinter
         try:
             self.bottom_bar.root.mainloop()
         except KeyboardInterrupt:
             self.stop_and_exit()
 
     def _init_transcriber_async(self):
-        model_name = self.config.get("model_size", "large-v3-turbo")
+        model_name = self.config.get("model_size", "base")
         try:
-            log_event(f"Chargement du modèle Whisper ({model_name}) en tâche de fond...")
+            log_event(f"[Memory] Chargement du modèle Whisper ({model_name}) à la demande...")
             self.transcriber = Transcriber(
                 model_size=model_name,
                 device=self.config.get("device", "cuda"),
@@ -498,12 +586,17 @@ class SpeechToTextApp:
                 initial_prompt=self.config.get("initial_prompt")
             )
             self.is_model_ready = True
-            log_event(f"Modèle Whisper ({model_name}) prêt ! Application prête et en veille.")
+            self.is_loading_model = False
+            self.model_ready_event.set()
+            log_event(f"[Memory] Modèle Whisper ({model_name}) prêt à l'emploi !")
             if self.bottom_bar:
                 self.bottom_bar.show_ready_safe()
             if self.tray:
                 self.tray.set_state("ready")
         except Exception as e:
+            self.is_loading_model = False
+            self.is_model_ready = False
+            self.model_ready_event.set()
             log_event(f"[Erreur Init Modèle] {e}")
             if self.bottom_bar:
                 self.bottom_bar.show_loading_safe(f"Erreur modèle: {e}")

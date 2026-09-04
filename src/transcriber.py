@@ -3,6 +3,10 @@ import sys
 import site
 import numpy as np
 
+# Bloquer l'import parasite de PyTorch (inutile pour faster-whisper et qui consomme +400 Mo de RAM inutilement)
+if "torch" not in sys.modules:
+    sys.modules["torch"] = None
+
 def init_cuda_dlls():
     """Ajoute dynamiquement tous les répertoires de DLL NVIDIA cuBLAS et cuDNN au chemin de recherche Windows."""
     if sys.platform != "win32":
@@ -103,6 +107,25 @@ class Transcriber:
             self.compute_type = compute_type
         if language is not None:
             self.language = language
+
+        # Libérer l'ancien modèle et forcer le nettoyage de la mémoire
+        if self.model is not None:
+            del self.model
+            self.model = None
+
+        import gc
+        gc.collect()
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.kernel32.SetProcessWorkingSetSize(
+                    ctypes.windll.kernel32.GetCurrentProcess(),
+                    ctypes.c_size_t(-1),
+                    ctypes.c_size_t(-1)
+                )
+            except Exception:
+                pass
+
         self._load_model()
 
     def transcribe(self, audio: np.ndarray) -> str:
