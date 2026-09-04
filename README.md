@@ -56,24 +56,38 @@ Key design principles:
 ### Method 1: Automatic Setup (Recommended)
 
 1. Clone or download this repository:
-   ```cmd
+   ```bash
    git clone https://github.com/MathiasCombalbert/whisper-desktop.git
    cd whisper-desktop
    ```
 
-2. Run the one-click installer:
-   ```cmd
-   install.bat
-   ```
-   *This validates your Python environment and installs all dependencies with CUDA support.*
+2. Run the interactive installer:
+   - **Windows**:
+     ```cmd
+     install.bat
+     ```
+     *Presents an interactive menu to install dependencies, compile for Windows, or compile for Linux via Docker.*
+   - **Linux**:
+     ```bash
+     chmod +x install.sh
+     ./install.sh
+     ```
+     *Installs required system packages (PortAudio, X11, ALSA, Tkinter) and Python dependencies.*
 
 ### Method 2: Manual Setup
 
 Ensure Python 3.10 or higher (64-bit) is installed, then run:
 
-```bash
-pip install -r requirements.txt
-```
+- **Windows**:
+  ```cmd
+  pip install -r requirements.txt
+  ```
+
+- **Linux (Debian / Ubuntu)**:
+  ```bash
+  sudo apt-get update && sudo apt-get install -y portaudio19-dev libasound2-dev libx11-dev xdotool python3-tk
+  pip install -r requirements.txt
+  ```
 
 ---
 
@@ -113,8 +127,12 @@ chmod +x build_linux.sh
 ## How to Use
 
 1. **Start the Application**:
-   - Double-click `run.bat` to launch the application silently into the system tray.
-   - Alternatively, run `run_debug.bat` to inspect live console logs and transcription metrics.
+   - **Windows**:
+     - Double-click `run.bat` to launch the application silently into the system tray.
+     - Alternatively, run `run_debug.bat` to inspect live console logs and transcription metrics.
+   - **Linux**:
+     - Run `./run.sh` to launch in the background.
+     - Alternatively, run `./run_debug.sh` for diagnostic terminal output.
 
 2. **Dictate**:
    - Focus your cursor in any editor or input area.
@@ -190,10 +208,13 @@ whisper-desktop/
 ├── build_windows.bat             # Standalone Windows PyInstaller build script
 ├── config.json                   # Application configuration file
 ├── requirements.txt              # Python package dependencies
-├── install.bat                   # Interactive setup and build manager
-├── run.bat                       # Primary one-click launcher
-├── run_debug.bat                 # Diagnostic console launcher
-├── run_silent.vbs                # Background startup script
+├── install.bat                   # Interactive setup and build manager (Windows)
+├── install.sh                    # Interactive setup and build manager (Linux)
+├── run.bat                       # Primary one-click launcher (Windows)
+├── run.sh                        # Background launcher (Linux)
+├── run_debug.bat                 # Diagnostic console launcher (Windows)
+├── run_debug.sh                  # Diagnostic console launcher (Linux)
+├── run_silent.vbs                # Background startup script (Windows)
 ├── .gitignore                    # Version control ignore definitions
 ├── LICENSE                       # MIT License
 └── README.md                     # Project documentation
