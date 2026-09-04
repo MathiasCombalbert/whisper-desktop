@@ -1,4 +1,4 @@
-# 🎙️ Whisper Desktop
+# Whisper Desktop
 
 <div align="center">
 
@@ -9,100 +9,97 @@
 [![CUDA](https://img.shields.io/badge/Hardware-NVIDIA%20CUDA%20%2F%20CPU%20Fallback-76B900.svg)](https://developer.nvidia.com/cuda-zone)
 
 **A minimalist, high-performance Windows speech-to-text desktop assistant powered by local OpenAI Whisper.**  
-*Dictate anywhere with a global hotkey, auto-paste directly into your active app without losing focus, and enjoy 0.0% CPU usage when idle.*
+*Dictate anywhere with a global shortcut, auto-paste directly into your active window without losing focus, and maintain 0.0% CPU usage when idle.*
 
-[Key Features](#-key-features) • [Installation](#-installation) • [How to Use](#-how-to-use) • [Configuration](#-configuration) • [Architecture](#-architecture) • [License](#-license)
+[Overview](#overview) • [Key Features](#key-features) • [Installation](#installation) • [How to Use](#how-to-use) • [Configuration](#configuration) • [Architecture](#architecture) • [License](#license)
 
 </div>
 
 ---
 
-## ✨ Overview
+## Overview
 
-**Whisper Desktop** is designed for developers, writers, and power users who want seamless, instant voice dictation directly into their tools (VS Code, Antigravity, Discord, browsers, terminals) with **zero latency**, **zero telemetry**, and **zero cloud dependency**.
+Whisper Desktop is a local dictation utility for Windows designed for developers, writers, and power users who require fast, offline speech-to-text directly into any text field (code editors, browsers, terminals, chat clients).
 
-Unlike heavy voice assistants that stay in the foreground or consume significant resources in the background, Whisper Desktop runs as an ultra-light tray application:
-- Press your global shortcut (**`Alt + Shift + V`**) anywhere.
-- Speak naturally.
-- The transcribed text is automatically pasted at your cursor position via Win32 API injection, **preserving the exact focus of your active application**.
-- The floating HUD disappears back into the system tray after dictation, consuming **0.0% CPU**.
-
----
-
-## 🚀 Key Features
-
-- **⚡ Local GPU Acceleration (`faster-whisper` on CUDA)**  
-  Blazing-fast transcription (~0.5s for typical sentences) utilizing NVIDIA Tensor Cores (`float16`). Automated fail-safe fallback to CPU (`int8`) on non-NVIDIA machines.
-
-- **🎯 Focus-Preserving Direct Injection**  
-  Uses native Win32 `AttachThreadInput` and `SetForegroundWindow` hooks to paste text (`Ctrl + V`) directly into Electron apps, code editors, and input fields without ever blurring or stealing window focus.
-
-- **🔋 Zero Idle Resource Usage (0.0% CPU)**  
-  When resting in the Windows System Tray, all polling and VU-meter rendering loops are completely suspended.
-
-- **🎛️ Minimalist Passive HUD & Audio VU-Meter**  
-  A non-intrusive floating bar (`WS_EX_NOACTIVATE`) displays real-time recording duration, live microphone input level (VU meter), and recent transcription preview.
-
-- **🎙️ 1-Click Dynamic Microphone Switcher**  
-  Switch instantly between your studio mic and webcam headset with a clean dropdown menu without restarting the app.
-
-- **⚙️ Built-in Graphical Settings**  
-  Adjust Whisper model size (`large-v3-turbo`, `medium`, `small`, `base`, `tiny`), transcription language, global hotkey, trigger mode (*Toggle* vs *Push-to-Talk*), and Windows startup with a single click.
-
-- **🛡️ 100% Private & Offline**  
-  Audio is processed entirely locally on your machine. No voice recordings or text ever leave your computer.
+Key design principles:
+- **Instant access**: Press a configurable global shortcut (`Alt + Shift + V` by default) to start recording.
+- **Focus preservation**: Transcribed text is pasted into the active application via Win32 API injection without blurring or shifting window focus.
+- **Zero idle impact**: The floating HUD and background processes consume 0.0% CPU cycles while waiting in the system tray.
+- **Complete privacy**: All processing occurs locally on your machine via CTranslate2. No audio or text data is transmitted over the network.
 
 ---
 
-## 📦 Installation
+## Key Features
 
-### Option 1: Quick Install (Recommended)
+- **Hardware Acceleration with Fail-Safe Fallback**  
+  Utilizes `faster-whisper` and NVIDIA CUDA Tensor Cores (`float16`) for sub-second transcription. Automatically switches to CPU (`int8`) execution if CUDA is unavailable.
+
+- **Focus-Preserving Direct Injection**  
+  Employs Win32 `AttachThreadInput` and synthetic input events to paste text into target windows seamlessly, preventing focus loss in Electron applications, IDEs, and browser forms.
+
+- **Passive Floating HUD**  
+  Built with native Windows non-activating flags (`WS_EX_NOACTIVATE`) so clicking interface controls does not steal window focus. Features an animated audio VU meter, status indicator, and preview label.
+
+- **Interactive Keybind Configuration**  
+  Assign shortcuts directly in the settings interface by pressing your desired key combination (similar to game controls), without needing to type key names manually.
+
+- **Dynamic Audio Device Selection**  
+  Switch between connected microphones on the fly via a dropdown menu on the HUD bar. Employs shared WASAPI mode to prevent audio device lockups.
+
+- **Zero Idle Resource Consumption**  
+  Background polling loops and audio capture threads are suspended when the application is idle in the system tray.
+
+---
+
+## Installation
+
+### Method 1: Automatic Setup (Recommended)
 
 1. Clone or download this repository:
-   ```bash
+   ```cmd
    git clone https://github.com/MathiasCombalbert/whisper-desktop.git
    cd whisper-desktop
    ```
 
-2. Run the one-click Windows installer:
+2. Run the one-click installer:
    ```cmd
    install.bat
    ```
-   *This automatically sets up the required Python packages and CUDA bindings.*
+   *This validates your Python environment and installs all dependencies with CUDA support.*
 
-### Option 2: Manual Setup
+### Method 2: Manual Setup
 
-Ensure you have **Python 3.10+** (64-bit) installed, then run:
+Ensure Python 3.10 or higher (64-bit) is installed, then run:
 
-```bash
+```cmd
 pip install -r requirements.txt
 ```
 
 ---
 
-## 🎮 How to Use
+## How to Use
 
-1. **Launch the Application**:
-   - Double-click **`run_silent.vbs`** to start silently in the Windows System Tray (recommended).
-   - Or double-click **`run_debug.bat`** to run with a live console log.
+1. **Start the Application**:
+   - Double-click `run.bat` to launch the application silently into the system tray.
+   - Alternatively, run `run_debug.bat` to inspect live console logs and transcription metrics.
 
-2. **Dictate Anywhere**:
-   - Place your cursor in any application (editor, browser, chat).
-   - Press **`Alt + Shift + V`** (or click `🎙️ Parler`).
-   - Speak your thoughts.
-   - Press **`Alt + Shift + V`** again (or click `✓ Coller`).
-   - The transcribed text is instantly pasted right at your cursor!
+2. **Dictate**:
+   - Focus your cursor in any editor or input area.
+   - Press `Alt + Shift + V` (or click the dictation button on the HUD).
+   - Speak your text.
+   - Press `Alt + Shift + V` again to finalize.
+   - The transcribed text is pasted immediately at your cursor position.
 
-3. **Customize & Minimize**:
-   - Click **`—`** (minimize) to hide the floating HUD back to the tray.
-   - Click **`⚙️`** to configure hotkeys, Whisper models, or input devices.
-   - Double-click the tray icon to toggle the HUD.
+3. **Manage & Customize**:
+   - Click `-` to minimize the HUD back to the system tray.
+   - Click the gear icon to open the configuration dialog and change the shortcut, Whisper model, language, or audio device.
+   - Double-click the system tray icon to toggle HUD visibility.
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
-Settings can be modified directly via the in-app **`⚙️` Settings** window, or by editing `config.json`:
+Settings can be managed through the built-in graphical dialog or edited in `config.json`:
 
 ```json
 {
@@ -122,40 +119,53 @@ Settings can be modified directly via the in-app **`⚙️` Settings** window, o
 }
 ```
 
-| Setting | Type | Description |
-| :--- | :--- | :--- |
-| `hotkey` | string | Global Windows key combination (e.g. `alt+shift+v`, `ctrl+shift+space`) |
-| `mode` | string | Trigger mode: `"toggle"` (press once to start, again to paste) or `"push_to_talk"` |
-| `model_size` | string | Whisper model: `"large-v3-turbo"`, `"medium"`, `"small"`, `"base"`, `"tiny"` |
-| `device` | string | Inference backend: `"cuda"` (NVIDIA GPU) or `"cpu"` |
-| `language` | string/null | Target language code (`"fr"`, `"en"`, etc.) or `null` for automatic multilingual detection |
-| `auto_hide_seconds` | int | Inactivity delay in seconds before the HUD automatically hides to tray |
+### Parameter Reference
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `hotkey` | string | `"alt+shift+v"` | Global keyboard combination |
+| `mode` | string | `"toggle"` | Trigger mode: `"toggle"` or `"push_to_talk"` |
+| `model_size` | string | `"large-v3-turbo"` | Whisper model size (`large-v3-turbo`, `medium`, `small`, `base`, `tiny`) |
+| `device` | string | `"cuda"` | Execution device (`"cuda"` or `"cpu"`) |
+| `compute_type` | string | `"float16"` | Precision type (`"float16"` for GPU, `"int8"` for CPU) |
+| `language` | string/null | `null` | Language code (e.g. `"fr"`, `"en"`) or `null` for automatic detection |
+| `auto_hide_seconds` | integer | `15` | Seconds of inactivity before the HUD minimizes to tray |
+| `audio_device` | integer/null | `null` | Selected input device index or `null` for system default |
+| `start_with_windows` | boolean | `false` | Launch automatically upon Windows user logon |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 whisper-desktop/
-├── app.py                # Main application orchestrator & background thread manager
-├── audio_recorder.py     # Resilient WASAPI audio capture & dynamic device switcher
-├── transcriber.py        # faster-whisper CTranslate2 engine with dynamic CUDA DLL loader
-├── bottom_bar.py         # Non-activating floating HUD bar (WS_EX_NOACTIVATE) & VU meter
-├── settings_dialog.py    # Native dark-themed configuration dialog
-├── paster.py             # Win32 AttachThreadInput focus-preserving keyboard injector
-├── tray_app.py           # Windows System Tray integration (pystray)
-├── autostart.py          # Windows Startup registry / shortcut manager
-├── config.json           # Application preferences
-├── requirements.txt      # Python dependencies
-├── install.bat           # 1-click Windows setup script
-├── run_silent.vbs        # Background launch script (zero console window)
-└── run_debug.bat         # Diagnostic launcher with stdout logging
+├── src/                          # Application source code
+│   ├── app.py                    # Application controller and background event loop
+│   ├── audio_recorder.py         # WASAPI audio streaming and device management
+│   ├── transcriber.py            # faster-whisper CTranslate2 inference engine
+│   ├── bottom_bar.py             # Passive floating HUD (WS_EX_NOACTIVATE)
+│   ├── settings_dialog.py        # Configuration dialog with interactive keybind recorder
+│   ├── paster.py                 # Focus-preserving Win32 keyboard injector
+│   ├── tray_app.py               # Windows system tray integration
+│   └── autostart.py              # Windows startup registration manager
+├── .github/                      # CI/CD pipelines
+│   └── workflows/
+│       └── release.yml           # Automated Windows binary packaging
+├── config.json                   # Application configuration file
+├── requirements.txt              # Python package dependencies
+├── install.bat                   # Environment setup script
+├── run.bat                       # Primary one-click launcher
+├── run_debug.bat                 # Diagnostic console launcher
+├── run_silent.vbs                # Background startup script
+├── .gitignore                    # Version control ignore definitions
+├── LICENSE                       # MIT License
+└── README.md                     # Project documentation
 ```
 
 ---
 
-## 📄 License
+## License
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
+This project is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for details.
 
 Copyright (c) 2026 **Mathias Combalbert**

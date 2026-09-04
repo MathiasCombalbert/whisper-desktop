@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-import threading
+from tkinter import ttk
+import keyboard
 
 MODELS = [
     ("large-v3-turbo", "large-v3-turbo (Recommandé - Ultra rapide & Haute précision, RTX)"),
@@ -24,11 +24,78 @@ MODES = [
     ("push_to_talk", "Maintenir pour parler (Push-to-Talk)"),
 ]
 
+class HotkeyRecorder:
+    """Enregistreur d'événements clavier interactif pour assigner un raccourci style jeu vidéo."""
+    MOD_MAP = {
+        'ctrl': 'ctrl', 'control': 'ctrl', 'left ctrl': 'ctrl', 'right ctrl': 'ctrl',
+        'alt': 'alt', 'menu': 'alt', 'left alt': 'alt', 'right alt': 'alt',
+        'shift': 'shift', 'left shift': 'shift', 'right shift': 'shift',
+        'windows': 'win', 'left windows': 'win', 'right windows': 'win'
+    }
+
+    def __init__(self, on_done, on_cancel):
+        self.on_done = on_done
+        self.on_cancel = on_cancel
+        self.hook = None
+        self.modifiers = set()
+        self.is_recording = False
+
+    def start(self):
+        self.is_recording = True
+        self.modifiers.clear()
+        self.hook = keyboard.hook(self._handler, suppress=False)
+
+    def stop(self):
+        self.is_recording = False
+        if self.hook:
+            try:
+                keyboard.unhook(self.hook)
+            except Exception:
+                pass
+            self.hook = None
+
+    def _handler(self, e):
+        if not self.is_recording:
+            return
+
+        name = e.name.lower()
+        mod = self.MOD_MAP.get(name)
+
+        if e.event_type == keyboard.KEY_DOWN:
+            if name in ('esc', 'escape'):
+                self.stop()
+                self.on_cancel()
+                return
+
+            if mod:
+                self.modifiers.add(mod)
+            else:
+                # Touche principale pressée
+                parts = []
+                for m in ['ctrl', 'alt', 'shift', 'win']:
+                    if m in self.modifiers:
+                        parts.append(m)
+                parts.append(name)
+                hotkey = '+'.join(parts)
+                self.stop()
+                self.on_done(hotkey)
+
+        elif e.event_type == keyboard.KEY_UP:
+            if mod in self.modifiers:
+                self.modifiers.discard(mod)
+
+
 class SettingsDialog:
     def __init__(self, parent, app_controller):
         self.parent = parent
         self.app = app_controller
         self.config = app_controller.config.copy()
+        self.current_hotkey = self.config.get("hotkey", "alt+shift+v").strip().lower()
+
+        self.hotkey_recorder = HotkeyRecorder(
+            on_done=self._on_hotkey_captured,
+            on_cancel=self._on_hotkey_cancelled
+        )
         
         self.win = tk.Toplevel(parent)
         self.win.title("Paramètres Speech-to-Text")
@@ -43,6 +110,8 @@ class SettingsDialog:
         x = (sw - w) // 2
         y = (sh - h) // 2
         self.win.geometry(f"{w}x{h}+{x}+{y}")
+
+        self.win.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # Thème TTK sombre pour comboboxes
         self._setup_styles()
@@ -78,6 +147,10 @@ class SettingsDialog:
             selectforeground=[("readonly", "#cdd6f4")]
         )
 
+    def _format_hotkey_display(self, hk: str) -> str:
+        parts = [p.capitalize() for p in hk.split("+")]
+        return " + ".join(parts)
+
     def _build_ui(self):
         container = tk.Frame(self.win, bg="#181825", padx=24, pady=20)
         container.pack(fill=tk.BOTH, expand=True)
@@ -88,7 +161,7 @@ class SettingsDialog:
 
         title_label = tk.Label(
             header_frame,
-            text="⚙️ Paramètres de Dictée Vocale",
+            text="Paramètres de Dictée Vocale",
             font=("Segoe UI", 13, "bold"),
             fg="#cdd6f4",
             bg="#181825"
@@ -130,7 +203,6 @@ class SettingsDialog:
         )
         self.mic_combo.pack(fill=tk.X)
 
-        # Sélectionner le micro actif
         cur_idx = self.app.recorder.active_device_index
         selected_combo_idx = 0
         for i, d in enumerate(self.devices):
@@ -208,7 +280,7 @@ class SettingsDialog:
                 break
         self.lang_combo.current(cur_lang_idx)
 
-        # --- 4. Raccourci Clavier ---
+        # --- 4. Raccourci Clavier Interactif (Style Gaming) ---
         hk_frame = tk.Frame(container, bg="#181825")
         hk_frame.pack(fill=tk.X, pady=(0, 12))
 
@@ -220,27 +292,51 @@ class SettingsDialog:
             bg="#181825"
         ).pack(anchor="w", pady=(0, 4))
 
-        self.hk_entry = tk.Entry(
-            hk_frame,
-            font=("Segoe UI", 9),
-            bg="#313244",
-            fg="#cdd6f4",
-            insertbackground="#cdd6f4",
-            relief=tk.FLAT,
-            highlightthickness=1,
-            highlightbackground="#45475a",
-            highlightcolor="#89b4fa"
-        )
-        self.hk_entry.insert(0, self.config.get("hotkey", "alt+shift+v"))
-        self.hk_entry.pack(fill=tk.X, ipady=3)
+        hk_row = tk.Frame(hk_frame, bg="#181825")
+        hk_row.pack(fill=tk.X)
 
-        tk.Label(
+        self.hk_btn = tk.Button(
+            hk_row,
+            text=self._format_hotkey_display(self.current_hotkey),
+            font=("Segoe UI", 10, "bold"),
+            bg="#313244",
+            fg="#89b4fa",
+            activebackground="#45475a",
+            activeforeground="#b4befe",
+            relief=tk.FLAT,
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=self._start_hotkey_capture
+        )
+        self.hk_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+
+        reset_btn = tk.Button(
+            hk_row,
+            text="↺ Défaut",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#6c7086",
+            activebackground="#313244",
+            activeforeground="#cdd6f4",
+            relief=tk.FLAT,
+            bd=0,
+            padx=8,
+            pady=6,
+            cursor="hand2",
+            command=self._reset_default_hotkey
+        )
+        reset_btn.pack(side=tk.RIGHT)
+
+        self.hk_help_label = tk.Label(
             hk_frame,
-            text="Exemples : alt+shift+v, ctrl+alt+space, f8, alt+d",
+            text="Cliquez sur le bouton pour assigner une touche (ex: Alt+W, F8, Ctrl+Shift+Space...).",
             font=("Segoe UI", 8),
             fg="#6c7086",
             bg="#181825"
-        ).pack(anchor="w", pady=(2, 0))
+        )
+        self.hk_help_label.pack(anchor="w", pady=(3, 0))
 
         # --- 5. Mode de déclenchement ---
         mode_frame = tk.Frame(container, bg="#181825")
@@ -296,7 +392,7 @@ class SettingsDialog:
 
         save_btn = tk.Button(
             btn_frame,
-            text="💾 Enregistrer les modifications",
+            text="Enregistrer les modifications",
             font=("Segoe UI", 9, "bold"),
             bg="#89b4fa",
             fg="#11111b",
@@ -322,9 +418,50 @@ class SettingsDialog:
             padx=14,
             pady=6,
             cursor="hand2",
-            command=self.win.destroy
+            command=self._on_close
         )
         cancel_btn.pack(side=tk.RIGHT)
+
+    def _start_hotkey_capture(self):
+        self.hk_btn.config(
+            text="Appuyez sur vos touches... (Échap pour annuler)",
+            bg="#f9e2af",
+            fg="#11111b"
+        )
+        self.hk_help_label.config(
+            text="Écoute active en cours... Appuyez sur votre combinaison de touches.",
+            fg="#f9e2af"
+        )
+        self.hotkey_recorder.start()
+
+    def _on_hotkey_captured(self, new_hotkey: str):
+        self.current_hotkey = new_hotkey
+        self.win.after(0, self._finish_capture_ui)
+
+    def _on_hotkey_cancelled(self):
+        self.win.after(0, self._finish_capture_ui)
+
+    def _finish_capture_ui(self):
+        self.hk_btn.config(
+            text=self._format_hotkey_display(self.current_hotkey),
+            bg="#313244",
+            fg="#89b4fa"
+        )
+        self.hk_help_label.config(
+            text="Raccourci assigné ! Cliquez à nouveau pour modifier.",
+            fg="#a6e3a1"
+        )
+
+    def _reset_default_hotkey(self):
+        if self.hotkey_recorder.is_recording:
+            self.hotkey_recorder.stop()
+        self.current_hotkey = "alt+shift+v"
+        self._finish_capture_ui()
+
+    def _on_close(self):
+        if self.hotkey_recorder:
+            self.hotkey_recorder.stop()
+        self.win.destroy()
 
     def _on_save(self):
         new_config = {}
@@ -345,10 +482,7 @@ class SettingsDialog:
             new_config["language"] = LANGUAGES[sel_lang_idx][0]
 
         # 4. Raccourci
-        hk = self.hk_entry.get().strip().lower()
-        if not hk:
-            hk = "alt+shift+v"
-        new_config["hotkey"] = hk
+        new_config["hotkey"] = self.current_hotkey
 
         # 5. Mode
         sel_mode_idx = self.mode_combo.current()
@@ -357,6 +491,9 @@ class SettingsDialog:
 
         # 6. Autostart
         new_config["start_with_windows"] = self.autostart_var.get()
+
+        if self.hotkey_recorder:
+            self.hotkey_recorder.stop()
 
         # Appliquer les modifications dans l'application
         self.app.apply_settings(new_config)
