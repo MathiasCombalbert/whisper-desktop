@@ -1,0 +1,15 @@
+{
+  "hotkey": "alt+shift+v",
+  "mode": "toggle",
+  "model_size": "large-v3-turbo",
+  "device": "cuda",
+  "compute_type": "float16",
+  "language": null,
+  "preserve_clipboard": false,
+  "sound_feedback": false,
+  "show_overlay": true,
+  "auto_hide_seconds": 15,
+  "audio_device": null,
+  "start_with_windows": false,
+  "initial_prompt": "Transcription en français pour le code, programmation, prompts, coller, copier, IA."
+}

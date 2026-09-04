@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Application Logs & Diagnostics (Strictly excluded)
+*.log
+app.log
+stdout.log
+stderr.log
+app_stdout.log
+app_stderr.log
+debug_*.log
+
+# Build & Packaging outputs
+build/
+dist/
+*.spec
+*.exe
+*.zip
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Model Weights & Hugging Face Cache
+models/
+models--*
+*.bin
+*.onnx
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

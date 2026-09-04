@@ -1,0 +1,10 @@
+faster-whisper>=1.0.0
+sounddevice>=0.5.0
+pynput>=1.8.0
+keyboard>=0.13.5
+pyperclip>=1.9.0
+pystray>=0.19.5
+Pillow>=10.0.0
+numpy>=1.24.0
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
