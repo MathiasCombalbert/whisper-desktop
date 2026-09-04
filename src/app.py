@@ -17,9 +17,17 @@ from bottom_bar import BottomBarHUD
 from tray_app import SystemTrayManager
 import autostart
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
-LOG_FILE = os.path.join(BASE_DIR, "app.log")
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SRC_DIR) if os.path.basename(SRC_DIR) == "src" else SRC_DIR
+
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+CONFIG_FILE = os.path.join(PROJECT_ROOT, "config.json")
+if not os.path.exists(CONFIG_FILE):
+    CONFIG_FILE = os.path.join(SRC_DIR, "config.json")
+
+LOG_FILE = os.path.join(PROJECT_ROOT, "app.log")
 
 DEFAULT_CONFIG = {
     "hotkey": "alt+shift+v",
@@ -34,7 +42,7 @@ DEFAULT_CONFIG = {
     "auto_hide_seconds": 15,
     "audio_device": None,
     "start_with_windows": False,
-    "initial_prompt": "Transcription en français pour Antigravity, code, IA, programmation, prompts, coller, copier."
+    "initial_prompt": "Transcription en français pour le code, programmation, prompts, coller, copier, IA."
 }
 
 def log_event(msg: str):

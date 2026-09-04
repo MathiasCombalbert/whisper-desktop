@@ -38,7 +38,7 @@ jobs:
             --hidden-import "sounddevice" `
             --hidden-import "keyboard" `
             --hidden-import "pyperclip" `
-            app.py
+            src/app.py
 
       - name: Copy auxiliary files to dist
         run: |

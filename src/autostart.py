@@ -18,7 +18,8 @@ def set_autostart(enable: bool, root_dir: str = None):
     startup_file = get_startup_file_path()
     if enable:
         if not root_dir:
-            root_dir = os.path.dirname(os.path.abspath(__file__))
+            src_dir = os.path.dirname(os.path.abspath(__file__))
+            root_dir = os.path.dirname(src_dir) if os.path.basename(src_dir) == "src" else src_dir
         
         # Trouver pythonw.exe (exécuteur Python sans fenêtre console)
         python_exe = sys.executable
@@ -26,7 +27,9 @@ def set_autostart(enable: bool, root_dir: str = None):
         if not os.path.exists(pythonw_exe):
             pythonw_exe = python_exe
 
-        app_py = os.path.join(root_dir, "app.py")
+        app_py = os.path.join(root_dir, "src", "app.py")
+        if not os.path.exists(app_py):
+            app_py = os.path.join(root_dir, "app.py")
 
         # Script VBScript qui lance silencieusement pythonw en arrière-plan
         vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")

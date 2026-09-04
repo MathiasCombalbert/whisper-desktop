@@ -27,7 +27,7 @@ echo.
 echo ====================================================
 echo  Installation completed successfully!
 echo  You can now start the application:
-echo   - Double-click 'run_silent.vbs' (starts in tray)
+echo   - Double-click 'run.bat' (runs silently in tray)
 echo   - Or run 'run_debug.bat' (with console logs)
 echo ====================================================
 pause

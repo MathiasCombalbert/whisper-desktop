@@ -12,17 +12,13 @@ def clean_device_name(raw_name: str) -> str:
         name = name[7:-1].strip()
 
     low = name.lower()
-    if "hyperx" in low or "quadcast" in low:
-        return "HyperX Quadcast"
-    if "c920" in low or ("webcam" in low and "hd" in low):
-        return "Micro Webcam (C920)"
     if "voicemeeter" in low:
         if "aux" in low:
             return "VoiceMeeter Aux"
         if "vaio3" in low:
             return "VoiceMeeter VAIO3"
         return "VoiceMeeter"
-    if "cable" in low:
+    if "cable output" in low:
         return "VB-Audio Cable"
     return name
 
@@ -157,10 +153,8 @@ class AudioRecorder:
                     score += 60
                 elif "directsound" in api_name:
                     score += 20
-                if "hyperx" in name or "quadcast" in name:
-                    score += 100
-                elif "micro" in name and not is_virtual:
-                    score += 30
+                if any(k in name for k in ["micro", "mic", "input", "headset", "casque"]):
+                    score += 35
                 if is_virtual:
                     score -= 50
                 candidates.append((score, i, d))
