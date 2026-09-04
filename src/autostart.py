@@ -1,56 +1,75 @@
 import os
 import sys
 
+WINDOWS_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+APP_NAME = "Whisper Desktop"
+
 def get_startup_file_path() -> str:
-    if sys.platform == "win32":
-        startup_dir = os.path.join(
-            os.environ.get("APPDATA", ""),
-            r"Microsoft\Windows\Start Menu\Programs\Startup"
-        )
-        return os.path.join(startup_dir, "SpeechToTextWhisper.vbs")
-    else:
-        # Standard XDG Autostart pour Linux
-        autostart_dir = os.path.expanduser("~/.config/autostart")
-        return os.path.join(autostart_dir, "whisper-desktop.desktop")
+    """Chemin pour Linux XDG autostart."""
+    autostart_dir = os.path.expanduser("~/.config/autostart")
+    return os.path.join(autostart_dir, "whisper-desktop.desktop")
 
 def is_autostart_enabled() -> bool:
-    path = get_startup_file_path()
-    return os.path.exists(path)
+    if sys.platform == "win32":
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WINDOWS_REG_KEY, 0, winreg.KEY_READ) as key:
+                winreg.QueryValueEx(key, APP_NAME)
+                return True
+        except Exception:
+            return False
+    else:
+        path = get_startup_file_path()
+        return os.path.exists(path)
 
 def set_autostart(enable: bool, root_dir: str = None):
-    startup_file = get_startup_file_path()
-    if enable:
-        if not root_dir:
-            src_dir = os.path.dirname(os.path.abspath(__file__))
-            root_dir = os.path.dirname(src_dir) if os.path.basename(src_dir) == "src" else src_dir
-        
-        if sys.platform == "win32":
-            python_exe = sys.executable
-            pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
-            if not os.path.exists(pythonw_exe):
-                pythonw_exe = python_exe
+    if not root_dir:
+        src_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(src_dir) if os.path.basename(src_dir) == "src" else src_dir
 
-            # Script VBScript qui détecte le binaire compilé ou le lanceur Python
-            vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
-Set FSO = CreateObject("Scripting.FileSystemObject")
-strRoot = "{root_dir}"
-WshShell.CurrentDirectory = strRoot
+    if sys.platform == "win32":
+        import winreg
 
-strExe = strRoot & "\\dist\\WhisperDesktop\\WhisperDesktop.exe"
-If FSO.FileExists(strExe) Then
-    WshShell.Run """" & strExe & """", 0, False
-ElseIf FSO.FileExists(strRoot & "\\run_silent.vbs") Then
-    WshShell.Run "wscript.exe """ & strRoot & "\\run_silent.vbs""", 0, False
-Else
-    WshShell.Run """" & "{pythonw_exe}" & """ """ & strRoot & "\\src\\app.py""", 0, False
-End If
-'''
-            os.makedirs(os.path.dirname(startup_file), exist_ok=True)
-            with open(startup_file, "w", encoding="utf-8") as f:
-                f.write(vbs_content)
-            print(f"[Autostart] Démarrage automatique Windows activé : {startup_file}")
-        else:
-            # Linux : Fichier .desktop standard
+        # Nettoyer l'ancien script legacy VBScript du dossier Startup si présent
+        legacy_vbs = os.path.join(
+            os.environ.get("APPDATA", ""),
+            r"Microsoft\Windows\Start Menu\Programs\Startup",
+            "SpeechToTextWhisper.vbs"
+        )
+        if os.path.exists(legacy_vbs):
+            try:
+                os.remove(legacy_vbs)
+            except Exception:
+                pass
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, WINDOWS_REG_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                if enable:
+                    if getattr(sys, "frozen", False):
+                        cmd = f'"{sys.executable}"'
+                    else:
+                        exe_path = os.path.join(root_dir, "dist", "WhisperDesktop", "WhisperDesktop.exe")
+                        if os.path.exists(exe_path):
+                            cmd = f'"{exe_path}"'
+                        else:
+                            vbs_path = os.path.join(root_dir, "run_silent.vbs")
+                            cmd = f'wscript.exe "{vbs_path}"'
+
+                    winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, cmd)
+                    print(f"[Autostart] Enregistré dans le Registre Windows (Gestionnaire des tâches) : {cmd}")
+                else:
+                    try:
+                        winreg.DeleteValue(key, APP_NAME)
+                        print("[Autostart] Supprimé du Registre Windows.")
+                    except FileNotFoundError:
+                        pass
+        except Exception as e:
+            print(f"[Autostart Registry Error] {e}")
+
+    else:
+        # Linux : Fichier .desktop standard
+        startup_file = get_startup_file_path()
+        if enable:
             exec_path = os.path.join(root_dir, "dist", "WhisperDesktop", "WhisperDesktop")
             if not os.path.exists(exec_path):
                 exec_path = os.path.join(root_dir, "run.sh")
@@ -71,10 +90,10 @@ X-GNOME-Autostart-enabled=true
             with open(startup_file, "w", encoding="utf-8") as f:
                 f.write(desktop_content)
             print(f"[Autostart] Démarrage automatique Linux activé : {startup_file}")
-    else:
-        if os.path.exists(startup_file):
-            try:
-                os.remove(startup_file)
-                print(f"[Autostart] Démarrage automatique désactivé.")
-            except Exception as e:
-                print(f"[Autostart Warning] Impossible de supprimer {startup_file}: {e}")
+        else:
+            if os.path.exists(startup_file):
+                try:
+                    os.remove(startup_file)
+                    print(f"[Autostart] Démarrage automatique désactivé.")
+                except Exception as e:
+                    print(f"[Autostart Warning] Impossible de supprimer {startup_file}: {e}")

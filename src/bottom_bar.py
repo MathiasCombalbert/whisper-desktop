@@ -475,6 +475,21 @@ class BottomBarHUD:
             except Exception:
                 pass
 
+    def show_loading(self, message="Chargement du modèle Whisper..."):
+        if not self.root:
+            return
+        try:
+            self.status_label.config(text="Init...", fg="#f9e2af")
+            self.dot_canvas.itemconfig(self.dot_id, fill="#f9e2af")
+            self.action_btn.config(text="⏳ Chargement", bg="#45475a", activebackground="#45475a")
+            self.preview_label.config(text=message, fg="#f9e2af", font=("Segoe UI", 8, "italic"))
+        except Exception:
+            pass
+
+    def show_loading_safe(self, message="Chargement du modèle Whisper..."):
+        if self.root:
+            self.root.after(0, lambda: self.show_loading(message))
+
     def show_recording_safe(self):
         if self.root:
             self.root.after(0, self.show_recording)

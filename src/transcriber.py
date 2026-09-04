@@ -37,10 +37,7 @@ def init_cuda_dlls():
     except Exception as e:
         print(f"[CUDA Init Warning] {e}")
 
-# Initialiser les DLLs avant l'import de faster-whisper
-init_cuda_dlls()
-
-from faster_whisper import WhisperModel
+WhisperModel = None
 
 # Liste des hallucinations classiques de Whisper générées sur du silence
 SILENCE_HALLUCINATIONS = [
@@ -65,6 +62,11 @@ class Transcriber:
         self._load_model()
 
     def _load_model(self):
+        global WhisperModel
+        if WhisperModel is None:
+            init_cuda_dlls()
+            from faster_whisper import WhisperModel
+
         print(f"[Whisper] Chargement du modèle '{self.model_size}' sur {self.device} ({self.compute_type})...")
         try:
             self.model = WhisperModel(

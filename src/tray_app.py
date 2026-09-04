@@ -36,15 +36,18 @@ class SystemTrayManager:
         if not self.icon:
             return
         try:
-            if state == "recording":
+            if state == "loading":
+                self.icon.icon = self.transcribing_img
+                self.icon.title = "Whisper Desktop: Chargement du modèle..."
+            elif state == "recording":
                 self.icon.icon = self.recording_img
-                self.icon.title = "Speech-to-Text: Enregistrement..."
+                self.icon.title = "Whisper Desktop: Enregistrement..."
             elif state == "transcribing":
                 self.icon.icon = self.transcribing_img
-                self.icon.title = "Speech-to-Text: Transcription Whisper..."
+                self.icon.title = "Whisper Desktop: Transcription Whisper..."
             else:
                 self.icon.icon = self.ready_img
-                self.icon.title = f"Speech-to-Text: Prêt ({self.app.config.get('hotkey', 'alt+shift+v')})"
+                self.icon.title = f"Whisper Desktop: Prêt ({self.app.config.get('hotkey', 'alt+shift+v').upper()})"
         except Exception:
             pass
 

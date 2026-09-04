@@ -1,18 +1,44 @@
 import os
 import sys
+
+# ==============================================================================
+# 0. VERIFICATION IMMEDIATE D'INSTANCE UNIQUE (AVANT TOUT CHARGEMENT DE MODULE)
+# ==============================================================================
+MUTEX_NAME = "WhisperDesktop_SingleInstance_Mutex"
+EVENT_NAME = "WhisperDesktop_Show_Event"
+_single_instance_mutex = None
+_single_instance_event = None
+_lock_file_fd = None
+
+if sys.platform == "win32":
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    _single_instance_mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        try:
+            ev = kernel32.OpenEventW(0x0002, False, EVENT_NAME)  # EVENT_MODIFY_STATE
+            if ev:
+                kernel32.SetEvent(ev)
+                kernel32.CloseHandle(ev)
+        except Exception:
+            pass
+        sys.exit(0)
+    _single_instance_event = kernel32.CreateEventW(None, False, False, EVENT_NAME)
+else:
+    ctypes = None
+    try:
+        import fcntl
+        lock_path = os.path.expanduser("~/.whisperdesktop.lock")
+        _lock_file_fd = open(lock_path, "w")
+        fcntl.lockf(_lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except Exception:
+        sys.exit(0)
+
 import json
 import time
 import threading
 import datetime
 import keyboard
-
-if sys.platform == "win32":
-    import ctypes
-else:
-    ctypes = None
-
-from transcriber import init_cuda_dlls
-init_cuda_dlls()
 
 from audio_recorder import AudioRecorder
 from transcriber import Transcriber
@@ -74,6 +100,7 @@ class SpeechToTextApp:
 
         self.is_recording = False
         self.is_transcribing = False
+        self.is_model_ready = False
         self.last_work_hwnd = None
         self.hotkey_hook = None
         self._lock = threading.Lock()
@@ -81,9 +108,22 @@ class SpeechToTextApp:
         # Démarrer la surveillance continue de la fenêtre active de travail
         threading.Thread(target=self._track_foreground_loop, daemon=True).start()
 
+        # Écouter les signaux d'activation en provenance d'autres instances (double-clic)
+        threading.Thread(target=self._listen_single_instance_event, daemon=True).start()
+
         # Synchroniser l'autostart Windows au lancement si activé
         if self.config.get("start_with_windows", False):
             autostart.set_autostart(True)
+
+    def _listen_single_instance_event(self):
+        """Réveille la barre HUD si l'utilisateur double-clique à nouveau sur l'exécutable."""
+        if sys.platform == "win32" and ctypes and _single_instance_event:
+            kernel32 = ctypes.windll.kernel32
+            while True:
+                res = kernel32.WaitForSingleObject(_single_instance_event, 0xFFFFFFFF)
+                if res == 0:  # WAIT_OBJECT_0
+                    if self.bottom_bar and self.bottom_bar.root:
+                        self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
 
     def _track_foreground_loop(self):
         """
@@ -266,6 +306,12 @@ class SpeechToTextApp:
         ).start()
 
     def _handle_hotkey_async(self, current_hwnd):
+        if not self.is_model_ready:
+            if self.bottom_bar and self.bottom_bar.root:
+                self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
+                self.bottom_bar.show_loading_safe("Modèle en cours de chargement, veuillez patienter un instant...")
+            return
+
         if current_hwnd and (not self.bottom_bar or current_hwnd != self.bottom_bar.bar_hwnd):
             self.last_work_hwnd = current_hwnd
 
@@ -291,6 +337,11 @@ class SpeechToTextApp:
 
     def on_manual_action(self):
         """Déclenché par le clic sur le bouton de la barre HUD."""
+        if not self.is_model_ready:
+            if self.bottom_bar:
+                self.bottom_bar.show_loading_safe("Modèle en cours de chargement, veuillez patienter un instant...")
+            return
+
         with self._lock:
             if self.is_transcribing:
                 return
@@ -405,16 +456,7 @@ class SpeechToTextApp:
         log_event("=" * 50)
         log_event("Initialisation de Speech-to-Text Whisper Desktop")
 
-        # 1. Initialiser Whisper (large-v3-turbo sur GPU)
-        self.transcriber = Transcriber(
-            model_size=self.config.get("model_size", "large-v3-turbo"),
-            device=self.config.get("device", "cuda"),
-            compute_type=self.config.get("compute_type", "float16"),
-            language=self.config.get("language"),
-            initial_prompt=self.config.get("initial_prompt")
-        )
-
-        # 2. Initialiser la Barre HUD (démarrage masqué par défaut en arrière-plan)
+        # 1. Initialiser la Barre HUD IMMÉDIATEMENT (< 100ms)
         self.bottom_bar = BottomBarHUD(self)
         self.bottom_bar.create_window()
 
@@ -422,20 +464,49 @@ class SpeechToTextApp:
         self.bottom_bar.set_mic_name(mic_name)
         log_event(f"Microphone configuré : {mic_name}")
 
-        # 3. Initialiser le System Tray
+        # 2. Initialiser le System Tray IMMÉDIATEMENT (icône visible dans la barre des tâches dès le double-clic)
         self.tray = SystemTrayManager(self)
         self.tray.start()
+        self.tray.set_state("loading")
 
-        # 4. Enregistrer le raccourci global
+        # 3. Enregistrer le raccourci global
         self.register_hotkey()
 
-        log_event("Application prête et en veille en arrière-plan !")
+        model_name = self.config.get("model_size", "large-v3-turbo")
+        self.bottom_bar.show_loading_safe(f"Chargement du modèle Whisper ({model_name})...")
+
+        # 4. Charger le modèle Whisper en tâche de fond (asynchrone)
+        threading.Thread(target=self._init_transcriber_async, daemon=True).start()
+
+        log_event("Interface prête et icône active dans la barre des tâches ! Modèle en cours de chargement...")
 
         # 5. Boucle principale d'événements Tkinter
         try:
             self.bottom_bar.root.mainloop()
         except KeyboardInterrupt:
             self.stop_and_exit()
+
+    def _init_transcriber_async(self):
+        model_name = self.config.get("model_size", "large-v3-turbo")
+        try:
+            log_event(f"Chargement du modèle Whisper ({model_name}) en tâche de fond...")
+            self.transcriber = Transcriber(
+                model_size=model_name,
+                device=self.config.get("device", "cuda"),
+                compute_type=self.config.get("compute_type", "float16"),
+                language=self.config.get("language"),
+                initial_prompt=self.config.get("initial_prompt")
+            )
+            self.is_model_ready = True
+            log_event(f"Modèle Whisper ({model_name}) prêt ! Application prête et en veille.")
+            if self.bottom_bar:
+                self.bottom_bar.show_ready_safe()
+            if self.tray:
+                self.tray.set_state("ready")
+        except Exception as e:
+            log_event(f"[Erreur Init Modèle] {e}")
+            if self.bottom_bar:
+                self.bottom_bar.show_loading_safe(f"Erreur modèle: {e}")
 
 if __name__ == "__main__":
     try:
