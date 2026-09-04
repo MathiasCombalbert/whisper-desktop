@@ -1,12 +1,14 @@
 import tkinter as tk
-import ctypes
+import sys
 import time
 import math
 import pyperclip
 
-GWL_EXSTYLE = -20
-WS_EX_NOACTIVATE = 0x08000000
-WS_EX_TOPMOST = 0x00000008
+if sys.platform == "win32":
+    import ctypes
+    GWL_EXSTYLE = -20
+    WS_EX_NOACTIVATE = 0x08000000
+    WS_EX_TOPMOST = 0x00000008
 
 class BottomBarHUD:
     """
@@ -54,16 +56,17 @@ class BottomBarHUD:
 
         self.root.update_idletasks()
 
-        # EMPÊCHER STRICTEMENT LE VOL DE FOCUS AU CLIC (WS_EX_NOACTIVATE)
-        try:
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
-            if not hwnd:
-                hwnd = self.root.winfo_id()
-            self.bar_hwnd = hwnd
-            ex = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOPMOST)
-        except Exception as e:
-            print(f"[HUD Warning] Style NoActivate: {e}")
+        # EMPÊCHER STRICTEMENT LE VOL DE FOCUS AU CLIC (WS_EX_NOACTIVATE sur Windows)
+        if sys.platform == "win32":
+            try:
+                hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+                if not hwnd:
+                    hwnd = self.root.winfo_id()
+                self.bar_hwnd = hwnd
+                ex = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOPMOST)
+            except Exception as e:
+                print(f"[HUD Warning] Style NoActivate: {e}")
 
         # Conteneur principal (takefocus=0)
         self.container = tk.Frame(self.root, bg="#1e1e2e", highlightbackground="#45475a", highlightthickness=1, takefocus=0)

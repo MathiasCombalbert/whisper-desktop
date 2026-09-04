@@ -5,7 +5,11 @@ import time
 import threading
 import datetime
 import keyboard
-import ctypes
+
+if sys.platform == "win32":
+    import ctypes
+else:
+    ctypes = None
 
 from transcriber import init_cuda_dlls
 init_cuda_dlls()
@@ -79,9 +83,21 @@ class SpeechToTextApp:
 
     def _track_foreground_loop(self):
         """
-        Garde en mémoire en permanence la vraie fenêtre active de l'utilisateur (Antigravity).
-        Filtre par PID : ignore TOUTES les fenêtres appartenant à notre propre processus.
+        Garde en mémoire en permanence la vraie fenêtre active de l'utilisateur.
+        Filtre par PID sous Windows : ignore TOUTES les fenêtres appartenant à notre propre processus.
         """
+        if sys.platform != "win32" or not ctypes:
+            # Mode Linux / POSIX : suivi basé sur xdotool si disponible
+            while True:
+                time.sleep(0.1)
+                try:
+                    fg = paster.get_active_window()
+                    if fg:
+                        self.last_work_hwnd = fg
+                except Exception:
+                    pass
+            return
+
         my_pid = os.getpid()
         user32 = ctypes.windll.user32
         while True:

@@ -1,0 +1,60 @@
+# Dockerfile pour compiler et packager Whisper Desktop pour Linux (x86_64)
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Installation des dependances systeme Linux (PortAudio, X11, Tkinter, ALSA)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libportaudio2 \
+    portaudio19-dev \
+    libasound2-dev \
+    libx11-dev \
+    libx11-6 \
+    xdotool \
+    python3-tk \
+    patchelf \
+    tar \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Installation des dependances Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir pyinstaller
+
+# Copie des sources du projet
+COPY config.json .
+COPY README.md .
+COPY LICENSE .
+COPY src/ ./src/
+
+# Compilation avec PyInstaller
+RUN pyinstaller --noconsole --onedir --name "WhisperDesktop" \
+    --add-data "config.json:." \
+    --collect-all faster_whisper \
+    --collect-all ctranslate2 \
+    --hidden-import "pystray" \
+    --hidden-import "sounddevice" \
+    --hidden-import "keyboard" \
+    --hidden-import "pyperclip" \
+    --hidden-import "pynput" \
+    src/app.py
+
+# Copie des fichiers annexes dans le dossier binaire
+RUN cp config.json dist/WhisperDesktop/ && \
+    cp README.md dist/WhisperDesktop/ && \
+    cp LICENSE dist/WhisperDesktop/
+
+# Creation de l'archive tar.gz prete pour la release
+RUN cd dist && tar -czvf WhisperDesktop-Linux-x64.tar.gz WhisperDesktop/
+
+# Test rapide de non-regression
+RUN test -f dist/WhisperDesktop/WhisperDesktop && chmod +x dist/WhisperDesktop/WhisperDesktop
+
+VOLUME ["/output"]
+
+CMD ["sh", "-c", "mkdir -p /output && cp -rv dist/* /output/ && echo '[SUCCESS] Linux binary exported to /output'"]

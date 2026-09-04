@@ -4,14 +4,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6.svg)](https://www.microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-0078D6.svg)](https://github.com/MathiasCombalbert/whisper-desktop)
 [![Engine](https://img.shields.io/badge/Engine-faster--whisper%20(CTranslate2)-orange.svg)](https://github.com/SYSTRAN/faster-whisper)
-[![CUDA](https://img.shields.io/badge/Hardware-NVIDIA%20CUDA%20%2F%20CPU%20Fallback-76B900.svg)](https://developer.nvidia.com/cuda-zone)
+[![Hardware](https://img.shields.io/badge/Hardware-NVIDIA%20CUDA%20%2F%20CPU%20Fallback-76B900.svg)](https://developer.nvidia.com/cuda-zone)
 
-**A minimalist, high-performance Windows speech-to-text desktop assistant powered by local OpenAI Whisper.**  
+**A minimalist, high-performance speech-to-text desktop assistant powered by local OpenAI Whisper for Windows and Linux.**  
 *Dictate anywhere with a global shortcut, auto-paste directly into your active window without losing focus, and maintain 0.0% CPU usage when idle.*
 
-[Overview](#overview) • [Key Features](#key-features) • [Installation](#installation) • [How to Use](#how-to-use) • [Configuration](#configuration) • [Architecture](#architecture) • [License](#license)
+[Overview](#overview) • [Key Features](#key-features) • [Installation](#installation) • [Compilation](#compilation) • [How to Use](#how-to-use) • [Configuration](#configuration) • [Architecture](#architecture) • [License](#license)
 
 </div>
 
@@ -71,8 +71,41 @@ Key design principles:
 
 Ensure Python 3.10 or higher (64-bit) is installed, then run:
 
-```cmd
+```bash
 pip install -r requirements.txt
+```
+
+---
+
+## Compilation
+
+Whisper Desktop can be packaged into standalone native binaries for Windows and Linux without requiring a pre-installed Python interpreter on the target system.
+
+### Compiling on Windows
+
+- **Via Interactive Manager**: Run `install.bat` and select `[2] Compiler l'executable Windows`.
+- **Direct Build Script**:
+  ```cmd
+  build_windows.bat
+  ```
+  The standalone bundle will be generated in `dist/WhisperDesktop/WhisperDesktop.exe`.
+
+### Compiling for Linux
+
+#### Option A: Cross-Compiling via Docker (Recommended from Windows)
+Requires Docker Desktop installed and running:
+- Run `install.bat` and select `[3] Compiler pour Linux via Docker`, or run:
+  ```cmd
+  build_linux.bat
+  ```
+  The compiled archive `WhisperDesktop-Linux-x64.tar.gz` will be placed in `dist/linux/`.
+
+#### Option B: Native Linux Compilation
+On an Ubuntu / Debian system:
+```bash
+sudo apt-get install -y portaudio19-dev libasound2-dev libx11-dev xdotool python3-tk patchelf
+chmod +x build_linux.sh
+./build_linux.sh
 ```
 
 ---
@@ -141,19 +174,23 @@ Settings can be managed through the built-in graphical dialog or edited in `conf
 whisper-desktop/
 ├── src/                          # Application source code
 │   ├── app.py                    # Application controller and background event loop
-│   ├── audio_recorder.py         # WASAPI audio streaming and device management
+│   ├── audio_recorder.py         # Audio streaming and dynamic input selection
 │   ├── transcriber.py            # faster-whisper CTranslate2 inference engine
 │   ├── bottom_bar.py             # Passive floating HUD (WS_EX_NOACTIVATE)
 │   ├── settings_dialog.py        # Configuration dialog with interactive keybind recorder
-│   ├── paster.py                 # Focus-preserving Win32 keyboard injector
-│   ├── tray_app.py               # Windows system tray integration
-│   └── autostart.py              # Windows startup registration manager
+│   ├── paster.py                 # Focus-preserving keyboard injector (Windows & Linux)
+│   ├── tray_app.py               # System tray integration
+│   └── autostart.py              # OS startup registration manager
 ├── .github/                      # CI/CD pipelines
 │   └── workflows/
-│       └── release.yml           # Automated Windows binary packaging
+│       └── release.yml           # Automated Windows & Linux binary releases
+├── Dockerfile.linux              # Containerized Linux build specification
+├── build_linux.sh                # Native Linux build script
+├── build_linux.bat               # Windows wrapper for Docker Linux compilation
+├── build_windows.bat             # Standalone Windows PyInstaller build script
 ├── config.json                   # Application configuration file
 ├── requirements.txt              # Python package dependencies
-├── install.bat                   # Environment setup script
+├── install.bat                   # Interactive setup and build manager
 ├── run.bat                       # Primary one-click launcher
 ├── run_debug.bat                 # Diagnostic console launcher
 ├── run_silent.vbs                # Background startup script

@@ -18,6 +18,7 @@ dist/
 *.spec
 *.exe
 *.zip
+*.tar.gz
 
 # Virtual Environments
 venv/
