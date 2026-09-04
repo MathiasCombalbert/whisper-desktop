@@ -25,20 +25,25 @@ def set_autostart(enable: bool, root_dir: str = None):
             root_dir = os.path.dirname(src_dir) if os.path.basename(src_dir) == "src" else src_dir
         
         if sys.platform == "win32":
-            # Trouver pythonw.exe (exécuteur Python sans fenêtre console)
             python_exe = sys.executable
             pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
             if not os.path.exists(pythonw_exe):
                 pythonw_exe = python_exe
 
-            app_py = os.path.join(root_dir, "src", "app.py")
-            if not os.path.exists(app_py):
-                app_py = os.path.join(root_dir, "app.py")
-
-            # Script VBScript qui lance silencieusement pythonw en arrière-plan
+            # Script VBScript qui détecte le binaire compilé ou le lanceur Python
             vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "{root_dir}"
-WshShell.Run """{pythonw_exe}"" ""{app_py}""", 0, False
+Set FSO = CreateObject("Scripting.FileSystemObject")
+strRoot = "{root_dir}"
+WshShell.CurrentDirectory = strRoot
+
+strExe = strRoot & "\\dist\\WhisperDesktop\\WhisperDesktop.exe"
+If FSO.FileExists(strExe) Then
+    WshShell.Run """" & strExe & """", 0, False
+ElseIf FSO.FileExists(strRoot & "\\run_silent.vbs") Then
+    WshShell.Run "wscript.exe """ & strRoot & "\\run_silent.vbs""", 0, False
+Else
+    WshShell.Run """" & "{pythonw_exe}" & """ """ & strRoot & "\\src\\app.py""", 0, False
+End If
 '''
             os.makedirs(os.path.dirname(startup_file), exist_ok=True)
             with open(startup_file, "w", encoding="utf-8") as f:
@@ -46,7 +51,9 @@ WshShell.Run """{pythonw_exe}"" ""{app_py}""", 0, False
             print(f"[Autostart] Démarrage automatique Windows activé : {startup_file}")
         else:
             # Linux : Fichier .desktop standard
-            exec_path = os.path.join(root_dir, "WhisperDesktop")
+            exec_path = os.path.join(root_dir, "dist", "WhisperDesktop", "WhisperDesktop")
+            if not os.path.exists(exec_path):
+                exec_path = os.path.join(root_dir, "run.sh")
             if not os.path.exists(exec_path):
                 exec_path = f"{sys.executable} {os.path.join(root_dir, 'src', 'app.py')}"
 

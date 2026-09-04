@@ -33,7 +33,7 @@ COPY LICENSE .
 COPY src/ ./src/
 
 # Compilation avec PyInstaller
-RUN pyinstaller --noconsole --onedir --name "WhisperDesktop" \
+RUN pyinstaller --noconsole --onedir --noconfirm --name "WhisperDesktop" \
     --add-data "config.json:." \
     --collect-all faster_whisper \
     --collect-all ctranslate2 \

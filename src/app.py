@@ -21,8 +21,12 @@ from bottom_bar import BottomBarHUD
 from tray_app import SystemTrayManager
 import autostart
 
-SRC_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SRC_DIR) if os.path.basename(SRC_DIR) == "src" else SRC_DIR
+if getattr(sys, "frozen", False):
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+    SRC_DIR = PROJECT_ROOT
+else:
+    SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROJECT_ROOT = os.path.dirname(SRC_DIR) if os.path.basename(SRC_DIR) == "src" else SRC_DIR
 
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
@@ -434,5 +438,16 @@ class SpeechToTextApp:
             self.stop_and_exit()
 
 if __name__ == "__main__":
-    app = SpeechToTextApp()
-    app.run()
+    try:
+        app = SpeechToTextApp()
+        app.run()
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        log_event(f"FATAL ERROR: {tb}")
+        for p in ["crash.log", os.path.join(PROJECT_ROOT, "crash.log")]:
+            try:
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write(tb)
+            except Exception:
+                pass

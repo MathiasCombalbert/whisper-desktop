@@ -15,7 +15,7 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 echo "[3/4] Compilation avec PyInstaller..."
-pyinstaller --noconsole --onedir --name "WhisperDesktop" \
+pyinstaller --noconsole --onedir --noconfirm --name "WhisperDesktop" \
     --add-data "config.json:." \
     --collect-all faster_whisper \
     --collect-all ctranslate2 \

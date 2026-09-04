@@ -17,7 +17,7 @@ python -m pip install --upgrade pyinstaller
 
 echo.
 echo [2/4] Compilation du binaire autonome Windows...
-pyinstaller --noconsole --onedir --name "WhisperDesktop" ^
+pyinstaller --noconsole --onedir --noconfirm --name "WhisperDesktop" ^
     --add-data "config.json;." ^
     --collect-all faster_whisper ^
     --collect-all ctranslate2 ^

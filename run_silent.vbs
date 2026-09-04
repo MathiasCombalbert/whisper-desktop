@@ -3,6 +3,14 @@ Set FSO = CreateObject("Scripting.FileSystemObject")
 strCurDir = FSO.GetParentFolderName(WScript.ScriptFullName)
 WshShell.CurrentDirectory = strCurDir
 
+' 1. Lancer l'executable autonome compile s'il existe
+strExe = strCurDir & "\dist\WhisperDesktop\WhisperDesktop.exe"
+If FSO.FileExists(strExe) Then
+    WshShell.Run """" & strExe & """", 0, False
+    WScript.Quit
+End If
+
+' 2. Sinon lancer via pythonw et src/app.py
 strPythonw = "pythonw.exe"
 If FSO.FileExists("C:\Python313\pythonw.exe") Then
     strPythonw = "C:\Python313\pythonw.exe"
