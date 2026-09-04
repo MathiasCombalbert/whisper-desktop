@@ -194,4 +194,51 @@ class Transcriber:
                     print(f"[Whisper Error] Échec du secours CPU: {fallback_err}")
             return ""
 
+def run_worker():
+    """Worker autonome exécuté en sous-processus isolé pour garantir 0 Mo de fuite en veille."""
+    import json
+    worker_idx = sys.argv.index("--worker") if "--worker" in sys.argv else 1
+    model_size = sys.argv[worker_idx + 1] if len(sys.argv) > worker_idx + 1 else "base"
+    device = sys.argv[worker_idx + 2] if len(sys.argv) > worker_idx + 2 else "cuda"
+    compute_type = sys.argv[worker_idx + 3] if len(sys.argv) > worker_idx + 3 else "float16"
+
+    try:
+        t = Transcriber(model_size=model_size, device=device, compute_type=compute_type)
+        sys.stdout.write("WD_READY\n")
+        sys.stdout.flush()
+    except Exception as e:
+        try:
+            t = Transcriber(model_size=model_size, device="cpu", compute_type="int8")
+            sys.stdout.write("WD_READY\n")
+            sys.stdout.flush()
+        except Exception as e2:
+            sys.stdout.write(f"WD_ERROR: {e2}\n")
+            sys.stdout.flush()
+            sys.exit(1)
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line or line == "QUIT":
+            break
+        try:
+            req = json.loads(line)
+            audio_path = req["audio_path"]
+            lang = req.get("language")
+            prompt = req.get("initial_prompt")
+            t.language = lang
+            t.initial_prompt = prompt
+
+            audio = np.load(audio_path)
+            res_text = t.transcribe(audio)
+            try:
+                os.remove(audio_path)
+            except Exception:
+                pass
+            resp = json.dumps({"status": "ok", "text": res_text})
+            sys.stdout.write(f"WD_RESP:{resp}\n")
+            sys.stdout.flush()
+        except Exception as err:
+            resp = json.dumps({"status": "error", "message": str(err)})
+            sys.stdout.write(f"WD_RESP:{resp}\n")
+            sys.stdout.flush()
 

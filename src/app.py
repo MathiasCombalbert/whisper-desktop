@@ -1,5 +1,13 @@
 import os
 import sys
+import subprocess
+
+# Si exécuté en tant que worker isolé pour la transcription Whisper
+if "--worker" in sys.argv:
+    # Retirer --worker pour ne pas perturber les modules
+    from transcriber import run_worker
+    run_worker()
+    sys.exit(0)
 
 # ==============================================================================
 # 0. VERIFICATION IMMEDIATE D'INSTANCE UNIQUE (AVANT TOUT CHARGEMENT DE MODULE)
@@ -43,9 +51,9 @@ import time
 import threading
 import datetime
 import keyboard
+import numpy as np
 
 from audio_recorder import AudioRecorder
-from transcriber import Transcriber
 import paster
 from bottom_bar import BottomBarHUD
 from tray_app import SystemTrayManager
@@ -57,6 +65,119 @@ if getattr(sys, "frozen", False):
 else:
     SRC_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(SRC_DIR) if os.path.basename(SRC_DIR) == "src" else SRC_DIR
+
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+class WorkerTranscriberClient:
+    """Gère le sous-processus Whisper isolé pour garantir 0 Mo de RAM résiduelle en arrière-plan."""
+    def __init__(self, model_size="base", device="cuda", compute_type="float16"):
+        self.model_size = model_size
+        self.device = device
+        self.compute_type = compute_type
+        self.proc = None
+        self._lock = threading.Lock()
+        self.is_ready = False
+        self.language = None
+        self.initial_prompt = None
+
+    def start(self):
+        with self._lock:
+            if self.proc is not None and self.proc.poll() is None:
+                return
+            if getattr(sys, "frozen", False):
+                exe = sys.executable
+                cmd = [exe, "--worker", str(self.model_size), str(self.device), str(self.compute_type)]
+            else:
+                python_exe = sys.executable
+                script = os.path.join(SRC_DIR, "app.py")
+                cmd = [python_exe, script, "--worker", str(self.model_size), str(self.device), str(self.compute_type)]
+
+            startupinfo = None
+            creationflags = 0
+            if sys.platform == "win32":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0
+                creationflags = 0x08000000 # CREATE_NO_WINDOW
+
+            try:
+                self.proc = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
+                )
+
+                while True:
+                    line = self.proc.stdout.readline()
+                    if not line:
+                        break
+                    line_clean = line.strip()
+                    if "WD_READY" in line_clean or "READY" in line_clean:
+                        self.is_ready = True
+                        break
+                    elif "WD_ERROR" in line_clean:
+                        self.is_ready = False
+                        log_event(f"[Worker Error] {line_clean}")
+                        break
+            except Exception as e:
+                log_event(f"[Worker Error] Échec démarrage worker: {e}")
+                self.is_ready = False
+
+    def transcribe(self, audio_data: np.ndarray) -> str:
+        with self._lock:
+            if self.proc is None or self.proc.poll() is not None:
+                self.start()
+            if not self.is_ready or self.proc is None:
+                return ""
+
+            import tempfile
+            temp_path = os.path.join(tempfile.gettempdir(), f"wd_audio_{os.getpid()}_{int(time.time()*1000)}.npy")
+            np.save(temp_path, audio_data)
+
+            req = json.dumps({
+                "audio_path": temp_path,
+                "language": self.language,
+                "initial_prompt": self.initial_prompt
+            })
+            try:
+                self.proc.stdin.write(req + "\n")
+                self.proc.stdin.flush()
+                while True:
+                    resp_line = self.proc.stdout.readline()
+                    if not resp_line:
+                        return ""
+                    resp_line = resp_line.strip()
+                    if "status" in resp_line:
+                        if resp_line.startswith("WD_RESP:"):
+                            resp_line = resp_line[len("WD_RESP:"):]
+                        resp = json.loads(resp_line)
+                        if resp.get("status") == "ok":
+                            return resp.get("text", "")
+                        return ""
+            except Exception as e:
+                log_event(f"[Worker Error] Échec transcription: {e}")
+            return ""
+
+    def stop(self):
+        with self._lock:
+            if self.proc is not None:
+                try:
+                    self.proc.stdin.write("QUIT\n")
+                    self.proc.stdin.flush()
+                    self.proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        self.proc.kill()
+                    except Exception:
+                        pass
+                self.proc = None
+                self.is_ready = False
 
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
@@ -289,9 +410,11 @@ class SpeechToTextApp:
                 return
 
             if self.transcriber is not None:
-                log_event("[Memory] Mise en veille : déchargement du modèle Whisper...")
+                log_event("[Memory] Mise en veille : arrêt du worker Whisper...")
                 try:
-                    if hasattr(self.transcriber, "model"):
+                    if hasattr(self.transcriber, "stop"):
+                        self.transcriber.stop()
+                    elif hasattr(self.transcriber, "model"):
                         del self.transcriber.model
                     del self.transcriber
                 except Exception:
@@ -312,7 +435,7 @@ class SpeechToTextApp:
                         )
                     except Exception:
                         pass
-                log_event("[Memory] Modèle Whisper déchargé. Mémoire libérée pour le mode veille.")
+                log_event("[Memory] Worker Whisper arrêté. Mémoire libérée pour le mode veille (10-15 Mo).")
                 if self.bottom_bar:
                     self.bottom_bar.show_ready_safe(status_msg="Prêt (veille)")
                 if self.tray:
@@ -332,16 +455,17 @@ class SpeechToTextApp:
                 text=f"Chargement du modèle '{new_model_size}'...", fg="#f9e2af"
             ))
         try:
-            log_event(f"Rechargement du modèle Whisper '{new_model_size}'...")
-            self.transcriber.reload_model(model_size=new_model_size)
-            log_event(f"Modèle Whisper '{new_model_size}' rechargé avec succès !")
+            log_event(f"Rechargement du worker Whisper '{new_model_size}'...")
+            self.unload_transcriber()
+            self._ensure_model_loading()
+            log_event(f"Worker Whisper '{new_model_size}' rechargé avec succès !")
             if self.bottom_bar and self.bottom_bar.root:
                 self.bottom_bar.root.after(0, lambda: self.bottom_bar.preview_label.config(
                     text=f"Modèle '{new_model_size}' prêt !", fg="#a6e3a1"
                 ))
             self._reset_idle_timer()
         except Exception as e:
-            log_event(f"Erreur rechargement modèle Whisper: {e}")
+            log_event(f"Erreur rechargement worker Whisper: {e}")
 
     def toggle_bar_visibility(self):
         if self.bottom_bar and self.bottom_bar.root:
@@ -364,31 +488,25 @@ class SpeechToTextApp:
             self.hotkey_hook = None
 
         try:
-            # suppress=True : Empêche Windows de propager 'Alt' à l'application cible
             self.hotkey_hook = keyboard.add_hotkey(
                 hotkey_str,
                 self.on_hotkey_triggered,
-                suppress=True
+                suppress=False
             )
-            log_event(f"Raccourci global enregistré: '{hotkey_str.upper()}' (suppress=True)")
+            log_event(f"Raccourci global enregistré: '{hotkey_str.upper()}'")
         except Exception as e:
-            try:
-                self.hotkey_hook = keyboard.add_hotkey(
-                    hotkey_str,
-                    self.on_hotkey_triggered,
-                    suppress=False
-                )
-                log_event(f"Raccourci global enregistré: '{hotkey_str.upper()}' (fallback)")
-            except Exception as e2:
-                log_event(f"Impossible d'enregistrer le raccourci: {e2}")
+            log_event(f"Impossible d'enregistrer le raccourci: {e}")
 
     def on_hotkey_triggered(self):
-        current_hwnd = paster.get_active_window()
-        threading.Thread(
-            target=self._handle_hotkey_async,
-            args=(current_hwnd,),
-            daemon=True
-        ).start()
+        try:
+            current_hwnd = paster.get_active_window()
+            threading.Thread(
+                target=self._handle_hotkey_async,
+                args=(current_hwnd,),
+                daemon=True
+            ).start()
+        except Exception as e:
+            log_event(f"[Hotkey Trigger Error] {e}")
 
     def _handle_hotkey_async(self, current_hwnd):
         self._cancel_idle_timer()
@@ -399,12 +517,13 @@ class SpeechToTextApp:
         mode = self.config.get("mode", "toggle")
         with self._lock:
             if self.is_transcribing:
+                if self.bottom_bar:
+                    self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
                 return
 
             if mode == "toggle":
                 if not self.is_recording:
-                    # Si la barre était masquée en arrière-plan, la faire apparaître immédiatement
-                    if self.bottom_bar and not self.bottom_bar.is_visible:
+                    if self.bottom_bar:
                         self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
                     self._ensure_model_loading()
                     self._start_recording()
@@ -412,7 +531,7 @@ class SpeechToTextApp:
                     self._stop_and_transcribe()
             elif mode == "push_to_talk":
                 if not self.is_recording:
-                    if self.bottom_bar and not self.bottom_bar.is_visible:
+                    if self.bottom_bar:
                         self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
                     self._ensure_model_loading()
                     self._start_recording()
@@ -449,6 +568,8 @@ class SpeechToTextApp:
         except Exception as e:
             log_event(f"Erreur démarrage micro: {e}")
             self.is_recording = False
+            if self.bottom_bar:
+                self.bottom_bar.show_loading_safe(f"Erreur micro: {e}")
             return
 
         if self.tray:
@@ -486,27 +607,33 @@ class SpeechToTextApp:
             # 1. Attendre que le modèle soit prêt s'il est en train de se charger à la demande
             if not self.is_model_ready or self.transcriber is None:
                 if self.bottom_bar:
-                    self.bottom_bar.show_loading_safe("Finalisation du chargement du modèle Whisper...")
+                    self.bottom_bar.show_loading_safe("Démarrage du modèle Whisper...")
                 self._ensure_model_loading()
                 ready = self.model_ready_event.wait(timeout=35)
                 if not ready or self.transcriber is None:
                     raise RuntimeError("Le modèle Whisper n'a pas pu être chargé à temps.")
 
-            start_t = time.time()
-            text = self.transcriber.transcribe(audio_data)
-            duration = time.time() - start_t
-            last_text = text
-
-            if text:
-                log_event(f"[Whisper ({duration:.2f}s)] Texte détecté : \"{text}\"")
-                dest_hwnd = target_hwnd if target_hwnd else self.last_work_hwnd
-                log_event(f"[Paster] Envoi du collage vers HWND: {dest_hwnd}")
-                paster.paste_text(text, target_hwnd=dest_hwnd, preserve_clipboard=False)
-                log_event("[Paster] Texte collé dans l'application cible.")
+            if len(audio_data) < 3200:
+                log_event("[Audio] Enregistrement trop court (< 0.2s).")
+                last_text = ""
             else:
-                log_event(f"[Whisper ({duration:.2f}s)] Aucun texte audible détecté.")
+                start_t = time.time()
+                text = self.transcriber.transcribe(audio_data)
+                duration = time.time() - start_t
+                last_text = text
+
+                if text:
+                    log_event(f"[Whisper ({duration:.2f}s)] Texte détecté : \"{text}\"")
+                    dest_hwnd = target_hwnd if target_hwnd else self.last_work_hwnd
+                    log_event(f"[Paster] Envoi du collage vers HWND: {dest_hwnd}")
+                    paster.paste_text(text, target_hwnd=dest_hwnd, preserve_clipboard=False)
+                    log_event("[Paster] Texte collé dans l'application cible.")
+                else:
+                    log_event(f"[Whisper ({duration:.2f}s)] Aucun texte audible détecté.")
         except Exception as e:
             log_event(f"[Process Error] {e}")
+            if self.bottom_bar:
+                self.bottom_bar.show_loading_safe(f"Erreur: {e}")
         finally:
             with self._lock:
                 self.is_transcribing = False
@@ -577,18 +704,22 @@ class SpeechToTextApp:
     def _init_transcriber_async(self):
         model_name = self.config.get("model_size", "base")
         try:
-            log_event(f"[Memory] Chargement du modèle Whisper ({model_name}) à la demande...")
-            self.transcriber = Transcriber(
+            log_event(f"[Memory] Démarrage du worker Whisper ({model_name}) à la demande...")
+            client = WorkerTranscriberClient(
                 model_size=model_name,
                 device=self.config.get("device", "cuda"),
-                compute_type=self.config.get("compute_type", "float16"),
-                language=self.config.get("language"),
-                initial_prompt=self.config.get("initial_prompt")
+                compute_type=self.config.get("compute_type", "float16")
             )
+            client.language = self.config.get("language")
+            client.initial_prompt = self.config.get("initial_prompt")
+            client.start()
+            if not client.is_ready:
+                raise RuntimeError("Le worker Whisper n'a pas pu démarrer.")
+            self.transcriber = client
             self.is_model_ready = True
             self.is_loading_model = False
             self.model_ready_event.set()
-            log_event(f"[Memory] Modèle Whisper ({model_name}) prêt à l'emploi !")
+            log_event(f"[Memory] Worker Whisper ({model_name}) prêt à l'emploi !")
             if self.bottom_bar:
                 self.bottom_bar.show_ready_safe()
             if self.tray:
@@ -597,7 +728,7 @@ class SpeechToTextApp:
             self.is_loading_model = False
             self.is_model_ready = False
             self.model_ready_event.set()
-            log_event(f"[Erreur Init Modèle] {e}")
+            log_event(f"[Erreur Init Worker] {e}")
             if self.bottom_bar:
                 self.bottom_bar.show_loading_safe(f"Erreur modèle: {e}")
 

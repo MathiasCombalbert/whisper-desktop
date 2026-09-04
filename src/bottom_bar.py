@@ -464,16 +464,35 @@ class BottomBarHUD:
             except Exception:
                 pass
 
+        # Libérer immédiatement la mémoire quand on remet en arrière-plan
+        if hasattr(self, "app") and self.app:
+            try:
+                self.app.unload_transcriber()
+            except Exception:
+                pass
+
     def restore_from_tray(self):
-        """Fait réapparaître la barre instantanément."""
+        """Fait réapparaître la barre instantanément au premier plan."""
         self.is_visible = True
         self._cancel_auto_hide()
         if self.root:
             try:
                 self.root.deiconify()
+                self.root.attributes("-topmost", True)
                 self.root.lift()
+                if sys.platform == "win32" and self.bar_hwnd:
+                    HWND_TOPMOST = -1
+                    SWP_NOMOVE = 0x0002
+                    SWP_NOSIZE = 0x0001
+                    SWP_SHOWWINDOW = 0x0040
+                    SWP_NOACTIVATE = 0x0010
+                    ctypes.windll.user32.SetWindowPos(
+                        self.bar_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE
+                    )
             except Exception:
                 pass
+
 
     def show_loading(self, message="Chargement du modèle Whisper..."):
         if not self.root:

@@ -219,8 +219,19 @@ class AudioRecorder:
                     )
                     self.stream.start()
                 except Exception as e2:
-                    self.recording = False
-                    raise RuntimeError(f"Démarrage micro [{self.active_device_index}]: {e2}")
+                    try:
+                        print(f"[Audio Warning] Bascule vers micro système par défaut: {e2}")
+                        self.stream = sd.InputStream(
+                            device=None,
+                            samplerate=self.target_sample_rate,
+                            channels=1,
+                            dtype="float32",
+                            callback=self._callback,
+                        )
+                        self.stream.start()
+                    except Exception as e3:
+                        self.recording = False
+                        raise RuntimeError(f"Démarrage micro impossible: {e3}")
 
     def stop(self) -> np.ndarray:
         with self._lock:
