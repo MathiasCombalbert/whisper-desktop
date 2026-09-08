@@ -27,18 +27,46 @@ MODES = [
 class HotkeyRecorder:
     """Enregistreur d'événements clavier interactif pour assigner un raccourci style jeu vidéo."""
     MOD_MAP = {
+        # Ctrl
         'ctrl': 'ctrl', 'control': 'ctrl', 'left ctrl': 'ctrl', 'right ctrl': 'ctrl',
+        'ctrl droite': 'ctrl', 'ctrl gauche': 'ctrl', 'left control': 'ctrl', 'right control': 'ctrl',
+        'strg': 'ctrl', 'strg droite': 'ctrl', 'strg gauche': 'ctrl',
+        # Alt
         'alt': 'alt', 'menu': 'alt', 'left alt': 'alt', 'right alt': 'alt',
+        'alt droite': 'alt', 'alt gauche': 'alt', 'alt gr': 'alt', 'altgr': 'alt',
+        # Shift / Maj
         'shift': 'shift', 'left shift': 'shift', 'right shift': 'shift',
-        'windows': 'win', 'left windows': 'win', 'right windows': 'win'
+        'maj': 'shift', 'maj droite': 'shift', 'maj gauche': 'shift',
+        'shift droite': 'shift', 'shift gauche': 'shift',
+        # Windows / Super
+        'win': 'win', 'windows': 'win', 'left windows': 'win', 'right windows': 'win',
+        'windows gauche': 'win', 'windows droite': 'win', 'super': 'win', 'meta': 'win'
     }
 
-    def __init__(self, on_done, on_cancel):
+    def __init__(self, on_done, on_cancel, on_progress=None):
         self.on_done = on_done
         self.on_cancel = on_cancel
+        self.on_progress = on_progress
         self.hook = None
         self.modifiers = set()
         self.is_recording = False
+
+    @classmethod
+    def get_modifier(cls, name: str):
+        if not name:
+            return None
+        n = name.strip().lower()
+        if n in cls.MOD_MAP:
+            return cls.MOD_MAP[n]
+        if any(k in n for k in ['shift', 'maj']):
+            return 'shift'
+        if any(k in n for k in ['ctrl', 'control', 'strg']):
+            return 'ctrl'
+        if 'alt' in n:
+            return 'alt'
+        if any(k in n for k in ['windows', 'super', 'meta']) or n == 'win':
+            return 'win'
+        return None
 
     def start(self):
         self.is_recording = True
@@ -54,12 +82,19 @@ class HotkeyRecorder:
                 pass
             self.hook = None
 
+    def _get_ordered_modifiers(self):
+        return [m for m in ['ctrl', 'alt', 'shift', 'win'] if m in self.modifiers]
+
     def _handler(self, e):
         if not self.is_recording:
             return
 
-        name = e.name.lower()
-        mod = self.MOD_MAP.get(name)
+        raw_name = e.name or ""
+        name = raw_name.strip().lower()
+        if not name:
+            return
+
+        mod = self.get_modifier(name)
 
         if e.event_type == keyboard.KEY_DOWN:
             if name in ('esc', 'escape'):
@@ -68,21 +103,42 @@ class HotkeyRecorder:
                 return
 
             if mod:
-                self.modifiers.add(mod)
+                if mod not in self.modifiers:
+                    self.modifiers.add(mod)
+                    if self.on_progress:
+                        self.on_progress(self._get_ordered_modifiers())
             else:
-                # Touche principale pressée
+                # Touche principale (non-modificateur) pressée
+                active_mods = set(self.modifiers)
+                try:
+                    if keyboard.is_pressed('ctrl'):
+                        active_mods.add('ctrl')
+                    if keyboard.is_pressed('alt'):
+                        active_mods.add('alt')
+                    if keyboard.is_pressed('shift') or keyboard.is_pressed('maj'):
+                        active_mods.add('shift')
+                    if keyboard.is_pressed('windows'):
+                        active_mods.add('win')
+                except Exception:
+                    pass
+
                 parts = []
                 for m in ['ctrl', 'alt', 'shift', 'win']:
-                    if m in self.modifiers:
+                    if m in active_mods:
                         parts.append(m)
-                parts.append(name)
+
+                if name not in parts:
+                    parts.append(name)
+
                 hotkey = '+'.join(parts)
                 self.stop()
                 self.on_done(hotkey)
 
         elif e.event_type == keyboard.KEY_UP:
-            if mod in self.modifiers:
+            if mod and mod in self.modifiers:
                 self.modifiers.discard(mod)
+                if self.on_progress:
+                    self.on_progress(self._get_ordered_modifiers())
 
 
 class SettingsDialog:
@@ -94,7 +150,8 @@ class SettingsDialog:
 
         self.hotkey_recorder = HotkeyRecorder(
             on_done=self._on_hotkey_captured,
-            on_cancel=self._on_hotkey_cancelled
+            on_cancel=self._on_hotkey_cancelled,
+            on_progress=self._on_hotkey_progress
         )
         
         self.win = tk.Toplevel(parent)
@@ -104,7 +161,7 @@ class SettingsDialog:
         self.win.resizable(False, False)
 
         # Centrage de la fenêtre
-        w, h = 520, 580
+        w, h = 520, 600
         sw = self.win.winfo_screenwidth()
         sh = self.win.winfo_screenheight()
         x = (sw - w) // 2
@@ -148,8 +205,23 @@ class SettingsDialog:
         )
 
     def _format_hotkey_display(self, hk: str) -> str:
-        parts = [p.capitalize() for p in hk.split("+")]
-        return " + ".join(parts)
+        if not hk:
+            return "Aucun"
+        display_map = {
+            "ctrl": "Ctrl",
+            "control": "Ctrl",
+            "alt": "Alt",
+            "shift": "Shift",
+            "maj": "Shift",
+            "win": "Win",
+            "windows": "Win",
+            "space": "Espace",
+            "escape": "Échap",
+            "esc": "Échap"
+        }
+        raw_parts = [p.strip().lower() for p in hk.split("+") if p.strip()]
+        formatted = [display_map.get(p, p.capitalize()) for p in raw_parts]
+        return " + ".join(formatted)
 
     def _build_ui(self):
         container = tk.Frame(self.win, bg="#181825", padx=24, pady=20)
@@ -329,9 +401,46 @@ class SettingsDialog:
         )
         reset_btn.pack(side=tk.RIGHT)
 
+        # Préréglages rapides en 1 clic
+        presets_frame = tk.Frame(hk_frame, bg="#181825")
+        presets_frame.pack(fill=tk.X, pady=(5, 0))
+
+        tk.Label(
+            presets_frame,
+            text="Préréglages :",
+            font=("Segoe UI", 8),
+            fg="#6c7086",
+            bg="#181825"
+        ).pack(side=tk.LEFT, padx=(0, 4))
+
+        presets = [
+            ("Alt + Shift + V", "alt+shift+v"),
+            ("Alt + W", "alt+w"),
+            ("Ctrl + Shift + Espace", "ctrl+shift+space"),
+            ("F8", "f8")
+        ]
+
+        for label, hk_val in presets:
+            btn = tk.Button(
+                presets_frame,
+                text=label,
+                font=("Segoe UI", 8),
+                bg="#262738",
+                fg="#a6adc8",
+                activebackground="#313244",
+                activeforeground="#89b4fa",
+                relief=tk.FLAT,
+                bd=0,
+                padx=6,
+                pady=2,
+                cursor="hand2",
+                command=lambda val=hk_val: self._set_preset_hotkey(val)
+            )
+            btn.pack(side=tk.LEFT, padx=2)
+
         self.hk_help_label = tk.Label(
             hk_frame,
-            text="Cliquez sur le bouton pour assigner une touche (ex: Alt+W, F8, Ctrl+Shift+Space...).",
+            text="Cliquez sur le bouton pour assigner une touche (ex: Alt+Shift+V, F8, Ctrl+Shift+Espace...).",
             font=("Segoe UI", 8),
             fg="#6c7086",
             bg="#181825"
@@ -429,10 +538,37 @@ class SettingsDialog:
             fg="#11111b"
         )
         self.hk_help_label.config(
-            text="Écoute active en cours... Appuyez sur votre combinaison de touches.",
+            text="Écoute active en cours... Appuyez sur votre combinaison (ex: Alt+Shift+V, F8...).",
             fg="#f9e2af"
         )
         self.hotkey_recorder.start()
+
+    def _on_hotkey_progress(self, mods: list):
+        def _update():
+            if not self.hotkey_recorder.is_recording:
+                return
+            if mods:
+                mod_str = " + ".join([m.capitalize() for m in mods])
+                self.hk_btn.config(
+                    text=f"{mod_str} + ...",
+                    bg="#f9e2af",
+                    fg="#11111b"
+                )
+                self.hk_help_label.config(
+                    text=f"Touche(s) maintenue(s) : {mod_str}. Appuyez maintenant sur la dernière touche (ex: V, Espace, W...).",
+                    fg="#f9e2af"
+                )
+            else:
+                self.hk_btn.config(
+                    text="Appuyez sur vos touches... (Échap pour annuler)",
+                    bg="#f9e2af",
+                    fg="#11111b"
+                )
+                self.hk_help_label.config(
+                    text="Écoute active en cours... Appuyez sur votre combinaison de touches.",
+                    fg="#f9e2af"
+                )
+        self.win.after(0, _update)
 
     def _on_hotkey_captured(self, new_hotkey: str):
         self.current_hotkey = new_hotkey
@@ -453,9 +589,12 @@ class SettingsDialog:
         )
 
     def _reset_default_hotkey(self):
+        self._set_preset_hotkey("alt+shift+v")
+
+    def _set_preset_hotkey(self, hk: str):
         if self.hotkey_recorder.is_recording:
             self.hotkey_recorder.stop()
-        self.current_hotkey = "alt+shift+v"
+        self.current_hotkey = hk
         self._finish_capture_ui()
 
     def _on_close(self):

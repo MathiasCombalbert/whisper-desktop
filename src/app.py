@@ -287,12 +287,38 @@ class SpeechToTextApp:
             except Exception:
                 pass
 
+    @staticmethod
+    def normalize_hotkey(hotkey_str: str) -> str:
+        if not hotkey_str:
+            return "alt+shift+v"
+        raw_parts = [p.strip().lower() for p in hotkey_str.split("+") if p.strip()]
+        normalized_parts = []
+        for p in raw_parts:
+            if p in ("maj", "maj droite", "maj gauche", "left shift", "right shift"):
+                p = "shift"
+            elif p in ("control", "left ctrl", "right ctrl", "ctrl droite", "ctrl gauche", "strg", "strg droite", "strg gauche"):
+                p = "ctrl"
+            elif p in ("menu", "left alt", "right alt", "alt droite", "alt gauche", "alt gr", "altgr"):
+                p = "alt"
+            elif p in ("windows", "left windows", "right windows", "windows droite", "windows gauche", "super", "meta"):
+                p = "win"
+            if p not in normalized_parts:
+                normalized_parts.append(p)
+
+        # Si le raccourci a été tronqué accidentellement sur les modificateurs seuls (ex: alt+maj ou alt+shift suite au bug)
+        if normalized_parts in (['alt', 'shift'], ['shift', 'alt'], ['alt'], ['shift'], ['ctrl']):
+            return "alt+shift+v"
+
+        return "+".join(normalized_parts) if normalized_parts else "alt+shift+v"
+
     def load_config(self) -> dict:
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
-                    return {**DEFAULT_CONFIG, **cfg}
+                    res = {**DEFAULT_CONFIG, **cfg}
+                    res["hotkey"] = self.normalize_hotkey(res.get("hotkey", "alt+shift+v"))
+                    return res
             except Exception as e:
                 log_event(f"Erreur lecture config: {e}")
         return DEFAULT_CONFIG.copy()
@@ -346,8 +372,8 @@ class SpeechToTextApp:
             self.switch_microphone(new_config["audio_device"])
 
         # 2. Raccourci
-        old_hotkey = self.config.get("hotkey", "alt+shift+v")
-        new_hotkey = new_config.get("hotkey", old_hotkey).strip().lower()
+        old_hotkey = self.normalize_hotkey(self.config.get("hotkey", "alt+shift+v"))
+        new_hotkey = self.normalize_hotkey(new_config.get("hotkey", old_hotkey))
         if new_hotkey != old_hotkey:
             self.config["hotkey"] = new_hotkey
             self.register_hotkey()
@@ -479,7 +505,9 @@ class SpeechToTextApp:
         pass
 
     def register_hotkey(self):
-        hotkey_str = self.config.get("hotkey", "alt+shift+v").strip().lower()
+        raw_hotkey = self.config.get("hotkey", "alt+shift+v")
+        hotkey_str = self.normalize_hotkey(raw_hotkey)
+        self.config["hotkey"] = hotkey_str
         if self.hotkey_hook is not None:
             try:
                 keyboard.remove_hotkey(self.hotkey_hook)
@@ -495,7 +523,7 @@ class SpeechToTextApp:
             )
             log_event(f"Raccourci global enregistré: '{hotkey_str.upper()}'")
         except Exception as e:
-            log_event(f"Impossible d'enregistrer le raccourci: {e}")
+            log_event(f"Impossible d'enregistrer le raccourci '{hotkey_str}': {e}")
 
     def on_hotkey_triggered(self):
         try:
@@ -550,8 +578,8 @@ class SpeechToTextApp:
                 self._stop_and_transcribe()
 
     def _watch_key_release(self):
-        hotkey_str = self.config.get("hotkey", "alt+shift+v").strip().lower()
-        keys = [k.strip() for k in hotkey_str.split("+")]
+        hotkey_str = self.normalize_hotkey(self.config.get("hotkey", "alt+shift+v"))
+        keys = [k.strip() for k in hotkey_str.split("+") if k.strip()]
         time.sleep(0.15)
         while self.is_recording and any(keyboard.is_pressed(k) for k in keys):
             time.sleep(0.04)
