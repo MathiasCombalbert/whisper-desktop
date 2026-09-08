@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 title Whisper Desktop - Setup & Build Manager
 
 :menu

@@ -42,7 +42,7 @@ jobs:
       - name: Copy auxiliary files to dist
         run: |
           Copy-Item -Path "config.json" -Destination "dist/WhisperDesktop/"
-          Copy-Item -Path "run_debug.bat" -Destination "dist/WhisperDesktop/"
+          if (Test-Path "scripts/run_debug.bat") { Copy-Item -Path "scripts/run_debug.bat" -Destination "dist/WhisperDesktop/" }
           Copy-Item -Path "LICENSE" -Destination "dist/WhisperDesktop/"
           Copy-Item -Path "README.md" -Destination "dist/WhisperDesktop/"
 

@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 echo ====================================================
 echo  Whisper Desktop - Compilation Linux via Docker
 echo ====================================================
@@ -29,7 +29,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/3] Construction de l'image Docker Linux (Ubuntu + PyInstaller)...
-docker build -t whisper-desktop-linux -f Dockerfile.linux .
+docker build -t whisper-desktop-linux -f scripts/Dockerfile.linux .
 if %errorlevel% neq 0 (
     echo [ERREUR] Echec de la construction de l'image Docker.
     pause

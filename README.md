@@ -64,13 +64,13 @@ Key design principles:
 2. Run the interactive installer:
    - **Windows**:
      ```cmd
-     install.bat
+     scripts\install.bat
      ```
      *Presents an interactive menu to install dependencies, compile for Windows, or compile for Linux via Docker.*
    - **Linux**:
      ```bash
-     chmod +x install.sh
-     ./install.sh
+     chmod +x scripts/install.sh
+     ./scripts/install.sh
      ```
      *Installs required system packages (PortAudio, X11, ALSA, Tkinter) and Python dependencies.*
 
@@ -97,10 +97,10 @@ Whisper Desktop can be packaged into standalone native binaries for Windows and 
 
 ### Compiling on Windows
 
-- **Via Interactive Manager**: Run `install.bat` and select `[2] Compiler l'executable Windows`.
+- **Via Interactive Manager**: Run `scripts\install.bat` and select `[2] Compiler l'executable Windows`.
 - **Direct Build Script**:
   ```cmd
-  build_windows.bat
+  scripts\build_windows.bat
   ```
   The standalone bundle will be generated in `dist/WhisperDesktop/WhisperDesktop.exe`.
 
@@ -108,9 +108,9 @@ Whisper Desktop can be packaged into standalone native binaries for Windows and 
 
 #### Option A: Cross-Compiling via Docker (Recommended from Windows)
 Requires Docker Desktop installed and running:
-- Run `install.bat` and select `[3] Compiler pour Linux via Docker`, or run:
+- Run `scripts\install.bat` and select `[3] Compiler pour Linux via Docker`, or run:
   ```cmd
-  build_linux.bat
+  scripts\build_linux.bat
   ```
   The compiled archive `WhisperDesktop-Linux-x64.tar.gz` will be placed in `dist/linux/`.
 
@@ -118,8 +118,8 @@ Requires Docker Desktop installed and running:
 On an Ubuntu / Debian system:
 ```bash
 sudo apt-get install -y portaudio19-dev libasound2-dev libx11-dev xdotool python3-tk patchelf
-chmod +x build_linux.sh
-./build_linux.sh
+chmod +x scripts/build_linux.sh
+./scripts/build_linux.sh
 ```
 
 ---
@@ -128,23 +128,21 @@ chmod +x build_linux.sh
 
 1. **Start the Application**:
    - **Windows**:
-     - Double-click `run.bat` to launch the application silently into the system tray.
-     - Alternatively, run `run_debug.bat` to inspect live console logs and transcription metrics.
+     - Double-click `run.bat` or `Whisper Desktop.lnk` to launch the application.
+     - Alternatively, run `scripts\run_debug.bat` to inspect live console logs and transcription metrics.
    - **Linux**:
-     - Run `./run.sh` to launch in the background.
-     - Alternatively, run `./run_debug.sh` for diagnostic terminal output.
+     - Run `./scripts/run.sh` to launch in the background.
+     - Alternatively, run `./scripts/run_debug.sh` for diagnostic terminal output.
 
 2. **Dictate**:
-   - Focus your cursor in any editor or input area.
-   - Press `Alt + Shift + V` (or click the dictation button on the HUD).
-   - Speak your text.
-   - Press `Alt + Shift + V` again to finalize.
-   - The transcribed text is pasted immediately at your cursor position.
+   - **Keyboard (Push-to-Talk)**: Focus any editor or text box, hold `Alt + Shift + V`, speak your text, and release the keys. The transcription pastes automatically!
+   - **Mouse (HUD Bar)**: Click **🎙️ Parler** on the floating bar, speak, then click **✓ Coller**.
+   - The transcribed text is pasted immediately at your cursor position without losing window focus.
 
 3. **Manage & Customize**:
-   - Click `-` to minimize the HUD back to the system tray.
-   - Click the gear icon to open the configuration dialog and change the shortcut, Whisper model, language, or audio device.
-   - Double-click the system tray icon to toggle HUD visibility.
+   - Click `✕` to hide the HUD back to the system tray (auto-hides after 15s of inactivity).
+   - Click the gear icon (`⚙️`) to open the settings dialog and change your shortcut, Whisper model, language, or microphone.
+   - Click or double-click the system tray icon to toggle HUD visibility.
 
 ---
 

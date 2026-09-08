@@ -19,11 +19,6 @@ LANGUAGES = [
     ("it", "Italien (it)"),
 ]
 
-MODES = [
-    ("toggle", "Basculer (Appuyer pour parler, réappuyer pour coller)"),
-    ("push_to_talk", "Maintenir pour parler (Push-to-Talk)"),
-]
-
 class HotkeyRecorder:
     """Enregistreur d'événements clavier interactif pour assigner un raccourci style jeu vidéo."""
     MOD_MAP = {
@@ -161,7 +156,7 @@ class SettingsDialog:
         self.win.resizable(False, False)
 
         # Centrage de la fenêtre
-        w, h = 520, 600
+        w, h = 520, 520
         sw = self.win.winfo_screenwidth()
         sh = self.win.winfo_screenheight()
         x = (sw - w) // 2
@@ -447,37 +442,7 @@ class SettingsDialog:
         )
         self.hk_help_label.pack(anchor="w", pady=(3, 0))
 
-        # --- 5. Mode de déclenchement ---
-        mode_frame = tk.Frame(container, bg="#181825")
-        mode_frame.pack(fill=tk.X, pady=(0, 12))
-
-        tk.Label(
-            mode_frame,
-            text="Comportement du raccourci :",
-            font=("Segoe UI", 9, "bold"),
-            fg="#cdd6f4",
-            bg="#181825"
-        ).pack(anchor="w", pady=(0, 4))
-
-        mode_labels = [label for _, label in MODES]
-        self.mode_combo = ttk.Combobox(
-            mode_frame,
-            values=mode_labels,
-            state="readonly",
-            style="Dark.TCombobox",
-            font=("Segoe UI", 9)
-        )
-        self.mode_combo.pack(fill=tk.X)
-
-        cur_mode = self.config.get("mode", "toggle")
-        cur_mode_idx = 0
-        for i, (m_val, _) in enumerate(MODES):
-            if m_val == cur_mode:
-                cur_mode_idx = i
-                break
-        self.mode_combo.current(cur_mode_idx)
-
-        # --- 6. Démarrage avec Windows & Options ---
+        # --- 5. Démarrage avec Windows & Options ---
         opt_frame = tk.Frame(container, bg="#181825")
         opt_frame.pack(fill=tk.X, pady=(0, 16))
 
@@ -623,12 +588,7 @@ class SettingsDialog:
         # 4. Raccourci
         new_config["hotkey"] = self.current_hotkey
 
-        # 5. Mode
-        sel_mode_idx = self.mode_combo.current()
-        if 0 <= sel_mode_idx < len(MODES):
-            new_config["mode"] = MODES[sel_mode_idx][0]
-
-        # 6. Autostart
+        # 5. Autostart
         new_config["start_with_windows"] = self.autostart_var.get()
 
         if self.hotkey_recorder:

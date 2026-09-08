@@ -1,5 +1,12 @@
 @echo off
 cd /d "%~dp0"
+if exist "WhisperDesktop.exe" (
+    echo [Debug] Lancement de WhisperDesktop.exe...
+    WhisperDesktop.exe
+    pause
+    goto end
+)
+cd /d "%~dp0.."
 echo ====================================================
 echo  Starting Whisper Desktop Speech-to-Text (Debug)
 echo ====================================================

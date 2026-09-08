@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 echo ====================================================
 echo  Whisper Desktop - Compilation Windows (PyInstaller)
 echo ====================================================
@@ -43,7 +43,7 @@ if exist "build" rmdir /s /q "build"
 echo.
 echo [3/4] Copie des fichiers annexes dans dist\WhisperDesktop\...
 if exist "config.json" copy /y "config.json" "dist\WhisperDesktop\" >nul
-if exist "run_debug.bat" copy /y "run_debug.bat" "dist\WhisperDesktop\" >nul
+if exist "scripts\run_debug.bat" copy /y "scripts\run_debug.bat" "dist\WhisperDesktop\" >nul
 if exist "README.md" copy /y "README.md" "dist\WhisperDesktop\" >nul
 if exist "LICENSE" copy /y "LICENSE" "dist\WhisperDesktop\" >nul
 

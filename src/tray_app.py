@@ -54,11 +54,6 @@ class SystemTrayManager:
         except Exception:
             pass
 
-    def _toggle_mode(self, icon, item_obj):
-        current_mode = self.app.config.get("mode", "toggle")
-        new_mode = "push_to_talk" if current_mode == "toggle" else "toggle"
-        self.app.set_mode(new_mode)
-
     def _toggle_autostart(self, icon, item_obj):
         current = self.app.is_autostart_active()
         self.app.set_autostart_active(not current)
@@ -85,10 +80,6 @@ class SystemTrayManager:
                 lambda text: f"Raccourci: {self.app.config.get('hotkey', 'alt+shift+v').upper()}",
                 lambda icon, item_obj: None,
                 enabled=False
-            ),
-            item(
-                lambda text: f"Mode actuel: {self.app.config.get('mode', 'toggle').replace('_', ' ').capitalize()}",
-                self._toggle_mode
             ),
             item("Langue de dictée", pystray.Menu(
                 item("Français", lambda icon, item_obj: self.app.set_language("fr"), checked=lambda item_obj: self.app.config.get("language") == "fr"),

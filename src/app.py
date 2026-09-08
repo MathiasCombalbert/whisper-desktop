@@ -190,7 +190,7 @@ LOG_FILE = os.path.join(PROJECT_ROOT, "app.log")
 
 DEFAULT_CONFIG = {
     "hotkey": "alt+shift+v",
-    "mode": "toggle",
+    "mode": "push_to_talk",
     "model_size": "base",
     "device": "cuda",
     "compute_type": "float16",
@@ -338,11 +338,6 @@ class SpeechToTextApp:
         self.save_config()
         autostart.set_autostart(enable)
 
-    def set_mode(self, mode: str):
-        self.config["mode"] = mode
-        self.save_config()
-        log_event(f"Mode basculé sur: {mode}")
-
     def set_language(self, lang: str):
         self.config["language"] = None if lang == "auto" else lang
         self.save_config()
@@ -390,10 +385,7 @@ class SpeechToTextApp:
         if self.transcriber:
             self.transcriber.language = self.config["language"]
 
-        # 5. Mode
-        self.config["mode"] = new_config.get("mode", "toggle")
-
-        # 6. Autostart
+        # 5. Autostart
         if "start_with_windows" in new_config:
             self.set_autostart_active(new_config["start_with_windows"])
 
@@ -542,28 +534,18 @@ class SpeechToTextApp:
         if current_hwnd and (not self.bottom_bar or current_hwnd != self.bottom_bar.bar_hwnd):
             self.last_work_hwnd = current_hwnd
 
-        mode = self.config.get("mode", "toggle")
         with self._lock:
             if self.is_transcribing:
                 if self.bottom_bar:
                     self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
                 return
 
-            if mode == "toggle":
-                if not self.is_recording:
-                    if self.bottom_bar:
-                        self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
-                    self._ensure_model_loading()
-                    self._start_recording()
-                else:
-                    self._stop_and_transcribe()
-            elif mode == "push_to_talk":
-                if not self.is_recording:
-                    if self.bottom_bar:
-                        self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
-                    self._ensure_model_loading()
-                    self._start_recording()
-                    threading.Thread(target=self._watch_key_release, daemon=True).start()
+            if not self.is_recording:
+                if self.bottom_bar:
+                    self.bottom_bar.root.after(0, self.bottom_bar.restore_from_tray)
+                self._ensure_model_loading()
+                self._start_recording()
+                threading.Thread(target=self._watch_key_release, daemon=True).start()
 
     def on_manual_action(self):
         """Déclenché par le clic sur le bouton de la barre HUD."""

@@ -1,6 +1,10 @@
 Set WshShell = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
-strCurDir = FSO.GetParentFolderName(WScript.ScriptFullName)
+strScriptDir = FSO.GetParentFolderName(WScript.ScriptFullName)
+strCurDir = FSO.GetParentFolderName(strScriptDir)
+If Not FSO.FileExists(strCurDir & "\config.json") Then
+    strCurDir = strScriptDir
+End If
 WshShell.CurrentDirectory = strCurDir
 
 ' 1. Lancer l'executable autonome compile s'il existe

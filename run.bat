@@ -1,3 +1,7 @@
 @echo off
 cd /d "%~dp0"
-start "" wscript.exe run_silent.vbs
+if exist "%~dp0dist\WhisperDesktop\WhisperDesktop.exe" (
+    start "" "%~dp0dist\WhisperDesktop\WhisperDesktop.exe"
+) else (
+    start "" wscript.exe scripts\run_silent.vbs
+)
