@@ -37,6 +37,9 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+rem Nettoyage du dossier temporaire build pour eviter toute confusion avec dist
+if exist "build" rmdir /s /q "build"
+
 echo.
 echo [3/4] Copie des fichiers annexes dans dist\WhisperDesktop\...
 if exist "config.json" copy /y "config.json" "dist\WhisperDesktop\" >nul

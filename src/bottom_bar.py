@@ -256,8 +256,9 @@ class BottomBarHUD:
         close_btn.bind("<Enter>", lambda e: close_btn.config(bg="#e78284", fg="#11111b"))
         close_btn.bind("<Leave>", lambda e: close_btn.config(bg="#181825", fg="#7f849c"))
 
-        # Démarrer masqué par défaut en arrière-plan
-        self.hide_to_tray()
+        # Afficher la barre au lancement pour confirmer le démarrage à l'écran
+        self.restore_from_tray()
+        self._schedule_auto_hide(seconds=15)
 
     def _on_preview_clicked(self, event):
         """Permet de copier manuellement le texte transcrit en cliquant dessus."""
